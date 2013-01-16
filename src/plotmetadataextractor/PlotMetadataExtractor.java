@@ -5,24 +5,24 @@
 package plotmetadataextractor;
 
 import invenio.common.ExtractorGeometryTools;
+import java.awt.Color;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-
 import java.util.Map;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.batik.bridge.BridgeContext;
@@ -36,12 +36,10 @@ import org.apache.batik.gvt.ShapeNode;
 import org.apache.batik.parser.DefaultPathHandler;
 import org.apache.batik.parser.DefaultPointsHandler;
 import org.apache.batik.parser.ParseException;
+import org.apache.batik.parser.PathHandler;
+import org.apache.batik.parser.PathParser;
 import org.apache.batik.parser.PointsHandler;
 import org.apache.batik.parser.PointsParser;
-
-import org.apache.batik.parser.PathParser;
-import org.apache.batik.parser.PathHandler;
-
 import org.apache.batik.util.XMLResourceDescriptor;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -59,7 +57,6 @@ public class PlotMetadataExtractor {
         final LinkedList points = new LinkedList();
         PointsParser pp = new PointsParser();
         PointsHandler ph = new DefaultPointsHandler() {
-
             @Override
             public void point(float x, float y) throws ParseException {
                 Point2D p = new Point2D.Float(x, y);
@@ -78,10 +75,11 @@ public class PlotMetadataExtractor {
     }
 
     /**
-     * Retrieves all line segments described by a given tree.
-     * All segments are described in the same coordinates system.
+     * Retrieves all line segments described by a given tree. All segments are
+     * described in the same coordinates system.
+     *
      * @param node
-     * @return 
+     * @return
      */
     public static List<Line2D> retrieveLineSegments(GraphicsNode node) {
         LinkedList<Line2D> segments = new LinkedList<Line2D>();
@@ -124,10 +122,10 @@ public class PlotMetadataExtractor {
     }
 
     /**
-     * 
+     *
      * @param pathIter
      * @param segments
-     * @param currentTransform 
+     * @param currentTransform
      */
     public static void extractSegmentsFromPath(PathIterator shapeIt, LinkedList<Line2D> segments) {
 
@@ -186,10 +184,12 @@ public class PlotMetadataExtractor {
     }
 
     /**
-     * Builds a line interval with ends in two given points and a correct orientation
+     * Builds a line interval with ends in two given points and a correct
+     * orientation
+     *
      * @param p1
      * @param p2
-     * @return 
+     * @return
      */
     public static Line2D buildLineFromPoints(Point2D p1, Point2D p2) {
         // we have a linear segment created... now we only have to put order on the 
@@ -234,7 +234,8 @@ public class PlotMetadataExtractor {
 
     /**
      * We can try to process the document using the SVG DOM
-     * @param fname 
+     *
+     * @param fname
      */
     public static void trySVGDOMProcessing(String fname) {
         try {
@@ -266,15 +267,21 @@ public class PlotMetadataExtractor {
         }
     }
 
-    public static double getIntervalAngle(Line2D interval) {
-        double xLen = Math.abs(interval.getX2() - interval.getX1());
-        double alpha; // we use grades for debugging purposes ... detection of PI/2 etc.. is difficult when seeing a number
+    public static float getIntervalAngle(Line2D interval) {
+
+        float xLen = Math.abs((float) (interval.getX2() - interval.getX1()));
+        float yLen = Math.abs((float) (interval.getY2() - interval.getY1()));
+
+        float alpha; // we use grades for debugging purposes ... detection of PI/2 etc.. is difficult when seeing a number
 
         if (xLen == 0) {
             alpha = 90;
         } else {
-            double sinAlpha = xLen / interval.getP1().distance(interval.getP2());
-            alpha = Math.asin(sinAlpha) * 360 / (2 * Math.PI);
+            float den = (float) interval.getP1().distance(interval.getP2());
+            float sinAlpha = yLen / den;
+
+            alpha = (float) Math.asin(sinAlpha) * 360 / (2 * (float) Math.PI);
+            System.out.print("");
         }
         if (interval.getY2() < interval.getY1()) {
             alpha = -alpha;
@@ -285,15 +292,101 @@ public class PlotMetadataExtractor {
 
     public static Map<Line2D, List<Line2D>> getOrthogonalIntervals(List<Line2D> intervals) {
         System.out.println("Processing line intervals");
-        for (Line2D interval : intervals) {
-            double alpha = getIntervalAngle(interval);
+        HashMap<Integer, List<Line2D>> linesByAngle = new HashMap<Integer, List<Line2D>>();
+        HashMap<Line2D, List<Line2D>> intersecting = new HashMap<Line2D, List<Line2D>>();
 
-            System.out.println("Detected that line segment " + ExtractorGeometryTools.lineToString(interval) + " is inclinde by the angle " + alpha);
+        // first divide lines into buckets by angle
+        for (Line2D interval : intervals) {
+            int alpha = Math.round(getIntervalAngle(interval));
+            if (!linesByAngle.containsKey(alpha)) {
+                linesByAngle.put(alpha, new LinkedList<Line2D>());
+            }
+            linesByAngle.get(alpha).add(interval);
+            //System.out.println("Detected that line segment " + ExtractorGeometryTools.lineToString(interval) + " is inclinde by the angle " + alpha);
         }
-        return null;
+
+        // now we consider every line and search for lines potentially being orthogonal to it
+
+        for (Line2D interval : intervals) {
+            int searchRadius = 3; // we search 3 angles around the exact orthogonality
+            int alpha = Math.round(getIntervalAngle(interval));
+            LinkedList<Line2D> curIntersecting = new LinkedList<Line2D>();
+
+            // using our representation, there is only one possible orthogonal direction !
+            int testAngle = alpha + 90 - searchRadius;
+            if (testAngle > 90) {
+                testAngle = alpha - 90 - searchRadius;
+            }
+
+            for (int i = 0; i < 2 * searchRadius; i++) {
+                List<Line2D> ortLines = linesByAngle.get(testAngle);
+                if (ortLines != null) {
+                    for (Line2D line : ortLines) {
+                        if (line.intersectsLine(interval)) {
+                            curIntersecting.add(line);
+                        }
+                    }
+                }
+                if (testAngle == 90) {
+                    testAngle = -90;
+                }
+                testAngle++;
+            }
+            if (curIntersecting.size() > 0) {
+                intersecting.put(interval, curIntersecting);
+            }
+
+        }
+
+
+        //render orthogonal
+
+        try {
+            DebugGraphicalOutput dout = DebugGraphicalOutput.getInstance();
+            dout.flush(new File("/tmp/out2.png"));
+
+
+            Random r = new Random();
+            for (Line2D line : intersecting.keySet()) {
+                if (r.nextInt(300) == 0) {
+                    //we search for the longest intersecting and draw intersecting with this one
+
+                    Line2D winner = line;
+
+                    for (Line2D inter : intersecting.get(line)) {
+                        if (lineLen(inter) > lineLen(winner)) {
+                            winner = inter;
+                        }
+                    }
+
+                    // now drawing the winner
+                    dout.graphics.setColor(new Color(r.nextInt(256), r.nextInt(256), r.nextInt(256)));
+                    Rectangle bounds = winner.getBounds();
+                    dout.graphics.draw(bounds);
+
+                    for (Line2D inter : intersecting.get(winner)) {
+                        dout.graphics.draw(inter.getBounds());
+                    }
+
+                }
+            }
+            dout.flush(new File("/tmp/out3.png"));
+        } catch (IOException ex) {
+            Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        return intersecting;
+
+
     }
 
-    /** Collect all lines being children of the given node */
+    private static double lineLen(Line2D l) {
+        return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
+    }
+
+    /**
+     * Collect all lines being children of the given node
+     */
     public static LinkedList<String> getLines(GraphicsNode root) {
         LinkedList<String> result = new LinkedList<String>();
         return result;
@@ -309,8 +402,9 @@ public class PlotMetadataExtractor {
         }
         System.out.println("Starting the processing using SVG DOM");
         trySVGDOMProcessing(args[0]);
-        System.out.println("Starting the processing by the Batik parser");
-        BufferedReader reader = new BufferedReader(new FileReader(args[0]));
+
+        //System.out.println("Starting the processing by the Batik parser");
+        //BufferedReader reader = new BufferedReader(new FileReader(args[0]));
         //    extractPoints(reader);
     }
 }
