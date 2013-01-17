@@ -19,6 +19,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -81,8 +82,8 @@ public class PlotMetadataExtractor {
      * @param node
      * @return
      */
-    public static List<Line2D> retrieveLineSegments(GraphicsNode node) {
-        LinkedList<Line2D> segments = new LinkedList<Line2D>();
+    public static List<Line2D> retrieveSegments(GraphicsNode node, LinkedList<Line2D> segments, LinkedList<Point2D> points) {
+
         LinkedList<Pair<GraphicsNode, AffineTransform>> searchStack = new LinkedList<Pair<GraphicsNode, AffineTransform>>();
         searchStack.push(new ImmutablePair<GraphicsNode, AffineTransform>(node, AffineTransform.getRotateInstance(0)));
 
@@ -105,7 +106,7 @@ public class PlotMetadataExtractor {
                 }
             } else {
                 if (curNode instanceof ShapeNode) {
-                    extractSegmentsFromSimpleNode((ShapeNode) curNode, segments, curTransform);
+                    extractSegmentsFromSimpleNode((ShapeNode) curNode, segments, points, curTransform);
                     // we are in a specialised node - we have to directly extract the 
                 } else {
                     System.out.println("Encountered Unknown type of a node !!");
@@ -127,7 +128,7 @@ public class PlotMetadataExtractor {
      * @param segments
      * @param currentTransform
      */
-    public static void extractSegmentsFromPath(PathIterator shapeIt, LinkedList<Line2D> segments) {
+    public static void extractSegmentsFromPath(PathIterator shapeIt, LinkedList<Line2D> segments, LinkedList<Point2D> points) {
 
         // Description of the path construction can be found at http://docs.oracle.com/javase/1.5.0/docs/api/java/awt/geom/PathIterator.html#currentSegment(double[])
 
@@ -135,7 +136,7 @@ public class PlotMetadataExtractor {
 
         Point2D firstPoint = null;
         Point2D prevPoint = null;
-        Point2D curPoint = null;
+        Point2D curPoint;
 
         HashMap<Integer, String> types = new HashMap<Integer, String>();
         types.put(PathIterator.SEG_CLOSE, "SEG_CLOSE");
@@ -156,6 +157,7 @@ public class PlotMetadataExtractor {
             }
 
             curPoint = new Point2D.Double(coords[0], coords[1]);
+
             if (prevPoint == null) {
                 firstPoint = curPoint;
             }
@@ -179,6 +181,8 @@ public class PlotMetadataExtractor {
             }
 
             shapeIt.next();
+
+            points.add(curPoint);
             prevPoint = curPoint;
         }
     }
@@ -210,9 +214,9 @@ public class PlotMetadataExtractor {
         return new Line2D.Double(p1.getX(), p1.getY(), p2.getX(), p2.getY());
     }
 
-    public static void extractSegmentsFromSimpleNode(ShapeNode node, LinkedList<Line2D> segments, AffineTransform currentTransform) {
+    public static void extractSegmentsFromSimpleNode(ShapeNode node, LinkedList<Line2D> segments, LinkedList<Point2D> points, AffineTransform currentTransform) {
 
-        extractSegmentsFromPath(node.getShape().getPathIterator(currentTransform), segments);
+        extractSegmentsFromPath(node.getShape().getPathIterator(currentTransform), segments, points);
         if (node.getShape() instanceof Rectangle2D) {
             Rectangle2D rectangle2D = (Rectangle2D) node.getShape();
             System.out.println("Encountered the rectangle");
@@ -243,6 +247,8 @@ public class PlotMetadataExtractor {
             SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
             String uri = "file://" + fname; //"http://www.example.org/diagram.svg";
             Document doc = f.createDocument(uri);
+
+
             System.out.println("Finished building the DOM structure");
             NodeList e1 = doc.getElementsByTagName("path");
             NodeList e2 = doc.getElementsByTagName("line");
@@ -254,12 +260,15 @@ public class PlotMetadataExtractor {
             CompositeGraphicsNode n;
             AffineTransform t;
             Point.Float p = new Point.Float();
-            List<Line2D> lineSegments = retrieveLineSegments(i);
-            getOrthogonalIntervals(lineSegments);
 
+            LinkedList<Line2D> lineSegments = new LinkedList<Line2D>();
+            LinkedList<Point2D> points = new LinkedList<Point2D>();
+            retrieveSegments(i, lineSegments, points);
 
+            Map<Line2D, List<Line2D>> orthogonalIntervals = getOrthogonalIntervals(lineSegments);
+            List<Pair<Line2D, Line2D>> plotAxis = getPlotAxis(lineSegments, points, orthogonalIntervals);
 
-            System.out.println("Finished building the DOM structure");
+            System.out.println("Detected the following number of axis: " + plotAxis.size());
 
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
@@ -378,6 +387,43 @@ public class PlotMetadataExtractor {
         return intersecting;
 
 
+    }
+
+    private static List<Pair<Line2D, Line2D>> getPlotAxis(LinkedList<Line2D> lineSegments1, LinkedList<Point2D> points, Map<Line2D, List<Line2D>> orthogonalIntervals) {
+        HashSet<Line2D> consideredLines = new HashSet<Line2D>();
+        for (Line2D interval : orthogonalIntervals.keySet()) {
+            consideredLines.add(interval);
+            for (Line2D ortInt : orthogonalIntervals.get(interval)) {
+                if (!consideredLines.contains(ortInt)) {
+                    // we haven't considered this pair yet
+                    Pair<Line2D, Line2D> axisCandidate = new ImmutablePair<Line2D, Line2D>(interval, ortInt);
+                    int linesOutside = getNumberOfPointsOutside(axisCandidate, points);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Calculates the number of points present in the graph, which are outside
+     * of the scope of the axis candidate The scope of axis candidate is defined
+     * as a rectangle spanned by its lines, extended by a small margin (Which is
+     * the parameter of the algorithm.
+     *
+     * @param segments List of all line segments present in the graph.
+     * @return
+     */
+    private static int getNumberOfPointsOutside(Pair<Line2D, Line2D> axisCandidate, List<Point2D> lineSegments) {
+        Line2D line1 = axisCandidate.getKey();
+        Line2D line2 = axisCandidate.getValue();
+        
+        
+        double minX = axisCandidate.getKey().getX1();
+        double minY = axisCandidate.getKey().getY1();
+        
+        
+        
+        return 0;
     }
 
     private static double lineLen(Line2D l) {
