@@ -4,6 +4,7 @@
  */
 package plotmetadataextractor;
 
+import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -16,7 +17,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.batik.bridge.BridgeContext;
@@ -37,17 +38,18 @@ import org.w3c.dom.NodeList;
  * @author piotr
  */
 public class SVGPlot {
+
     public Rectangle boundary;
     public List<Point2D> points;
     public List<Line2D> lineSegments;
-    
-    
-    public SVGPlot(){
+    public HashMap<Line2D, List<Line2D>> orthogonalIntervals;
+
+    public SVGPlot() {
         this.lineSegments = new LinkedList<Line2D>();
-        this.points = new LinkedList<Point2D>();            
+        this.points = new LinkedList<Point2D>();
     }
-    
-    public SVGPlot(String fName){
+
+    public SVGPlot(String fName) {
         this();
         try {
             String parser = XMLResourceDescriptor.getXMLParserClassName();
@@ -64,24 +66,130 @@ public class SVGPlot {
             GraphicsNode i = b.build(cx, doc);
             CompositeGraphicsNode n;
             AffineTransform t;
-            Point.Float p = new Point.Float();         
+            Point.Float p = new Point.Float();
 
             addGraphicsNode(i);
-
-            Map<Line2D, List<Line2D>> orthogonalIntervals = getOrthogonalIntervals(lineSegments);
-            List<Pair<Line2D, Line2D>> plotAxis = getPlotAxis(lineSegments, points, orthogonalIntervals);
-
-            System.out.println("Detected the following number of axis: " + plotAxis.size());
-
+            this.calculateOrthogonalIntervals();
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
             // ...
         }
     }
-            
-    
-    
-    
+
+    public static double lineLen(Line2D l) {
+        return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
+    }
+
+    public static float getIntervalAngle(Line2D interval) {
+
+        float xLen = Math.abs((float) (interval.getX2() - interval.getX1()));
+        float yLen = Math.abs((float) (interval.getY2() - interval.getY1()));
+
+        float alpha; // we use grades for debugging purposes ... detection of PI/2 etc.. is difficult when seeing a number
+
+        if (xLen == 0) {
+            alpha = 90;
+        } else {
+            float den = (float) interval.getP1().distance(interval.getP2());
+            float sinAlpha = yLen / den;
+
+            alpha = (float) Math.asin(sinAlpha) * 360 / (2 * (float) Math.PI);
+            System.out.print("");
+        }
+        if (interval.getY2() < interval.getY1()) {
+            alpha = -alpha;
+        }
+        return alpha;
+    }
+
+    public void calculateOrthogonalIntervals() {
+        System.out.println("Processing line intervals");
+        HashMap<Integer, List<Line2D>> linesByAngle = new HashMap<Integer, List<Line2D>>();
+        HashMap<Line2D, List<Line2D>> intersecting = new HashMap<Line2D, List<Line2D>>();
+
+        // first divide lines into buckets by angle
+        for (Line2D interval : this.lineSegments) {
+            int alpha = Math.round(getIntervalAngle(interval));
+            if (!linesByAngle.containsKey(alpha)) {
+                linesByAngle.put(alpha, new LinkedList<Line2D>());
+            }
+            linesByAngle.get(alpha).add(interval);
+            //System.out.println("Detected that line segment " + ExtractorGeometryTools.lineToString(interval) + " is inclinde by the angle " + alpha);
+        }
+
+        // now we consider every line and search for lines potentially being orthogonal to it
+
+        for (Line2D interval : this.lineSegments) {
+            int searchRadius = 3; // we search 3 angles around the exact orthogonality
+            int alpha = Math.round(getIntervalAngle(interval));
+            LinkedList<Line2D> curIntersecting = new LinkedList<Line2D>();
+
+            // using our representation, there is only one possible orthogonal direction !
+            int testAngle = alpha + 90 - searchRadius;
+            if (testAngle > 90) {
+                testAngle = alpha - 90 - searchRadius;
+            }
+
+            for (int i = 0; i < 2 * searchRadius; i++) {
+                List<Line2D> ortLines = linesByAngle.get(testAngle);
+                if (ortLines != null) {
+                    for (Line2D line : ortLines) {
+                        if (line.intersectsLine(interval)) {
+                            curIntersecting.add(line);
+                        }
+                    }
+                }
+                if (testAngle == 90) {
+                    testAngle = -90;
+                }
+                testAngle++;
+            }
+            if (curIntersecting.size() > 0) {
+                intersecting.put(interval, curIntersecting);
+            }
+
+        }
+
+
+        //render orthogonal
+
+        try {
+            DebugGraphicalOutput dout = DebugGraphicalOutput.getInstance();
+            dout.flush(new File("/tmp/out2.png"));
+
+
+            Random r = new Random();
+            for (Line2D line : intersecting.keySet()) {
+                if (r.nextInt(300) == 0) {
+                    //we search for the longest intersecting and draw intersecting with this one
+
+                    Line2D winner = line;
+
+                    for (Line2D inter : intersecting.get(line)) {
+                        if (lineLen(inter) > lineLen(winner)) {
+                            winner = inter;
+                        }
+                    }
+
+                    // now drawing the winner
+                    dout.graphics.setColor(new Color(r.nextInt(256), r.nextInt(256), r.nextInt(256)));
+                    Rectangle bounds = winner.getBounds();
+                    dout.graphics.draw(bounds);
+
+                    for (Line2D inter : intersecting.get(winner)) {
+                        dout.graphics.draw(inter.getBounds());
+                    }
+
+                }
+            }
+            dout.flush(new File("/tmp/out3.png"));
+        } catch (IOException ex) {
+            Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        this.orthogonalIntervals = intersecting;
+    }
+
     /**
      * Retrieves all line segments described by a given tree. All segments are
      * described in the same coordinates system.
@@ -113,7 +221,7 @@ public class SVGPlot {
                 }
             } else {
                 if (curNode instanceof ShapeNode) {
-                    
+
                     this.includeShape(((ShapeNode) curNode).getShape(), curTransform);
                     // we are in a specialised node - we have to directly extract the 
                 } else {
@@ -129,10 +237,12 @@ public class SVGPlot {
 //            Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
 //        }
     }
-    
-    /** Includes a path in the plot */
-    public void includeShape(Shape shape, AffineTransform currentTransform){
-          
+
+    /**
+     * Includes a path in the plot
+     */
+    public void includeShape(Shape shape, AffineTransform currentTransform) {
+
         // Description of the path construction can be found at http://docs.oracle.com/javase/1.5.0/docs/api/java/awt/geom/PathIterator.html#currentSegment(double[])
 
         PathIterator shapeIt = shape.getPathIterator(currentTransform);
@@ -151,14 +261,14 @@ public class SVGPlot {
         double coords[] = new double[6];
 
         while (!shapeIt.isDone()) {
-            System.out.println();
+//            System.out.println();
             int segType = shapeIt.currentSegment(coords);
 
-            System.out.println("Segment type: " + types.get(segType) + "  points: ");
-            // printing the points:
-            for (int i = 0; i < 3; ++i) {
-                System.out.println(" (" + coords[2 * i] + ", " + coords[2 * i + 1] + ")");
-            }
+//            System.out.println("Segment type: " + types.get(segType) + "  points: ");
+//            // printing the points:
+//            for (int i = 0; i < 3; ++i) {
+//                System.out.println(" (" + coords[2 * i] + ", " + coords[2 * i + 1] + ")");
+//            }
 
             curPoint = new Point2D.Double(coords[0], coords[1]);
 
@@ -189,8 +299,7 @@ public class SVGPlot {
             prevPoint = curPoint;
         }
     }
-    
-    
+
     /**
      * Builds a line interval with ends in two given points and a correct
      * orientation
@@ -217,5 +326,4 @@ public class SVGPlot {
 
         return new Line2D.Double(p1.getX(), p1.getY(), p2.getX(), p2.getY());
     }
-    
 }
