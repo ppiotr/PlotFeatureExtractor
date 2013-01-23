@@ -9,7 +9,6 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
-import java.awt.geom.Line2D;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.io.File;
@@ -41,11 +40,11 @@ public class SVGPlot {
 
     public Rectangle boundary;
     public List<Point2D> points;
-    public List<Line2D> lineSegments;
-    public HashMap<Line2D, List<Line2D>> orthogonalIntervals;
+    public List<ExtLine2D> lineSegments;
+    public HashMap<ExtLine2D, List<ExtLine2D>> orthogonalIntervals;
 
     public SVGPlot() {
-        this.lineSegments = new LinkedList<Line2D>();
+        this.lineSegments = new LinkedList<ExtLine2D>();
         this.points = new LinkedList<Point2D>();
     }
 
@@ -76,42 +75,17 @@ public class SVGPlot {
         }
     }
 
-    public static double lineLen(Line2D l) {
-        return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
-    }
-
-    public static float getIntervalAngle(Line2D interval) {
-
-        float xLen = Math.abs((float) (interval.getX2() - interval.getX1()));
-        float yLen = Math.abs((float) (interval.getY2() - interval.getY1()));
-
-        float alpha; // we use grades for debugging purposes ... detection of PI/2 etc.. is difficult when seeing a number
-
-        if (xLen == 0) {
-            alpha = 90;
-        } else {
-            float den = (float) interval.getP1().distance(interval.getP2());
-            float sinAlpha = yLen / den;
-
-            alpha = (float) Math.asin(sinAlpha) * 360 / (2 * (float) Math.PI);
-            System.out.print("");
-        }
-        if (interval.getY2() < interval.getY1()) {
-            alpha = -alpha;
-        }
-        return alpha;
-    }
 
     public void calculateOrthogonalIntervals() {
         System.out.println("Processing line intervals");
-        HashMap<Integer, List<Line2D>> linesByAngle = new HashMap<Integer, List<Line2D>>();
-        HashMap<Line2D, List<Line2D>> intersecting = new HashMap<Line2D, List<Line2D>>();
+        HashMap<Integer, List<ExtLine2D>> linesByAngle = new HashMap<Integer, List<ExtLine2D>>();
+        HashMap<ExtLine2D, List<ExtLine2D>> intersecting = new HashMap<ExtLine2D, List<ExtLine2D>>();
 
         // first divide lines into buckets by angle
-        for (Line2D interval : this.lineSegments) {
-            int alpha = Math.round(getIntervalAngle(interval));
+        for (ExtLine2D interval : this.lineSegments) {
+            int alpha = Math.round(interval.getAngle());
             if (!linesByAngle.containsKey(alpha)) {
-                linesByAngle.put(alpha, new LinkedList<Line2D>());
+                linesByAngle.put(alpha, new LinkedList<ExtLine2D>());
             }
             linesByAngle.get(alpha).add(interval);
             //System.out.println("Detected that line segment " + ExtractorGeometryTools.lineToString(interval) + " is inclinde by the angle " + alpha);
@@ -119,10 +93,10 @@ public class SVGPlot {
 
         // now we consider every line and search for lines potentially being orthogonal to it
 
-        for (Line2D interval : this.lineSegments) {
+        for (ExtLine2D interval : this.lineSegments) {
             int searchRadius = 3; // we search 3 angles around the exact orthogonality
-            int alpha = Math.round(getIntervalAngle(interval));
-            LinkedList<Line2D> curIntersecting = new LinkedList<Line2D>();
+            int alpha = Math.round(interval.getAngle());
+            LinkedList<ExtLine2D> curIntersecting = new LinkedList<ExtLine2D>();
 
             // using our representation, there is only one possible orthogonal direction !
             int testAngle = alpha + 90 - searchRadius;
@@ -131,9 +105,9 @@ public class SVGPlot {
             }
 
             for (int i = 0; i < 2 * searchRadius; i++) {
-                List<Line2D> ortLines = linesByAngle.get(testAngle);
+                List<ExtLine2D> ortLines = linesByAngle.get(testAngle);
                 if (ortLines != null) {
-                    for (Line2D line : ortLines) {
+                    for (ExtLine2D line : ortLines) {
                         if (line.intersectsLine(interval)) {
                             curIntersecting.add(line);
                         }
@@ -159,14 +133,14 @@ public class SVGPlot {
 
 
             Random r = new Random();
-            for (Line2D line : intersecting.keySet()) {
+            for (ExtLine2D line : intersecting.keySet()) {
                 if (r.nextInt(300) == 0) {
                     //we search for the longest intersecting and draw intersecting with this one
 
-                    Line2D winner = line;
+                    ExtLine2D winner = line;
 
-                    for (Line2D inter : intersecting.get(line)) {
-                        if (lineLen(inter) > lineLen(winner)) {
+                    for (ExtLine2D inter : intersecting.get(line)) {
+                        if (inter.len() > winner.len()) {
                             winner = inter;
                         }
                     }
@@ -176,7 +150,7 @@ public class SVGPlot {
                     Rectangle bounds = winner.getBounds();
                     dout.graphics.draw(bounds);
 
-                    for (Line2D inter : intersecting.get(winner)) {
+                    for (ExtLine2D inter : intersecting.get(winner)) {
                         dout.graphics.draw(inter.getBounds());
                     }
 
@@ -308,7 +282,7 @@ public class SVGPlot {
      * @param p2
      * @return
      */
-    private Line2D buildLineFromPoints(Point2D p1, Point2D p2) {
+    private ExtLine2D buildLineFromPoints(Point2D p1, Point2D p2) {
         // we have a linear segment created... now we only have to put order on the 
         // points - we want to have the point starting from the left-most point ... if equal,
         // at the bottom
@@ -324,6 +298,6 @@ public class SVGPlot {
             p2 = tmp;
         }
 
-        return new Line2D.Double(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+        return new ExtLine2D(p1.getX(), p1.getY(), p2.getX(), p2.getY());
     }
 }
