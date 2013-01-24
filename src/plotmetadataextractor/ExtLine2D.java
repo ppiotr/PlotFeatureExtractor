@@ -6,6 +6,8 @@ package plotmetadataextractor;
 
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  *
@@ -17,25 +19,27 @@ public class ExtLine2D extends Line2D.Double {
         super(x1, y1, x2, y2);
     }
 
-    /** Calculates the euclidean l2 length of the given line segment
-     * 
+    /**
+     * Calculates the euclidean l2 length of the given line segment
+     *
      * @param l
-     * @return 
+     * @return
      */
     public static double len(Line2D l) {
         return l.getP1().distance(l.getP2());
         //return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
-        
+
     }
 
     /**
      * Calcualtes the l2 length of the line segment
-     * @return 
+     *
+     * @return
      */
-    public double  len(){
+    public double len() {
         return ExtLine2D.len(this);
     }
-  
+
     /**
      * Normalises the line:
      *
@@ -189,6 +193,61 @@ public class ExtLine2D extends Line2D.Double {
             alpha = -alpha;
         }
         return alpha;
+
+    }
+
+    /// these methods should be moved to a different class ... in the case of need to reuse
+    /**
+     * Returns a unit vector colinear such that (P1 -> P2) * this.len() = P2 -
+     * P1
+     *
+     * @return
+     */
+    public Pair<java.lang.Double, java.lang.Double> getUnitVector() {
+        return new ImmutablePair<java.lang.Double, java.lang.Double>((this.getX2() - this.getX1()) / this.len(), (this.getY2() - this.getY1()) / this.len());
+
+    }
+
+    public static Pair<java.lang.Double, java.lang.Double> getVector(Point2D.Double p1, Point2D.Double p2) {
+        return new ImmutablePair<java.lang.Double, java.lang.Double>(p2.getX() - p1.getX(), p2.getY() - p1.getY());
+    }
+
+    /**
+     *
+     * @param vec1
+     * @param vec2
+     * @return
+     */
+    public static double vecScalarProd(Pair<java.lang.Double, java.lang.Double> vec1, Pair<java.lang.Double, java.lang.Double> vec2) {
+        return vec1.getKey() * vec2.getKey() + vec1.getValue() * vec2.getValue();
+    }
+
+    public static double vecLen(Pair<java.lang.Double, java.lang.Double> vec) {
+        return Math.sqrt(vecScalarProd(vec, vec));
+    }
+
+    public static Pair<java.lang.Double, java.lang.Double> vecAdd(Pair<java.lang.Double, java.lang.Double> v1, Pair<java.lang.Double, java.lang.Double> v2) {
+        return new ImmutablePair<java.lang.Double, java.lang.Double>(v1.getKey() + v2.getKey(), v1.getValue() + v2.getValue());
+    }
+
+    public static Pair<java.lang.Double, java.lang.Double> vecSub(Pair<java.lang.Double, java.lang.Double> v1, Pair<java.lang.Double, java.lang.Double> v2) {
+        return new ImmutablePair<java.lang.Double, java.lang.Double>(v1.getKey() - v2.getKey(), v1.getValue() - v2.getValue());
+    }
+
+    public static Pair<java.lang.Double, java.lang.Double> vecMul(java.lang.Double a, Pair<java.lang.Double, java.lang.Double> v2) {
+        return new ImmutablePair<java.lang.Double, java.lang.Double>(a * v2.getKey(), a * v2.getValue());
+    }
+
+    /**
+     * Calculates the distance from the given line to a point. By line we
+     * understand not the
+     */
+    public double distance(Point2D.Double point) {
+
+        Pair<java.lang.Double, java.lang.Double> vn = this.getUnitVector();
+        Pair<java.lang.Double, java.lang.Double> w = getVector(point, (Point2D.Double) this.getP2());
+        Pair<java.lang.Double, java.lang.Double> ortho = vecSub(w, vecMul(vecScalarProd(w, vn), vn));
+        return vecLen(ortho);
 
     }
 }

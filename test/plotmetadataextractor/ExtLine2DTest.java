@@ -1,3 +1,5 @@
+package plotmetadataextractor;
+
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
@@ -132,5 +134,40 @@ public class ExtLine2DTest {
         angle = line.getAngle();
         assertEquals(angle, -45, 0.001);
 
+    }
+    
+    
+    @Test
+    public void testLineDistances(){
+        ExtLine2D line = new ExtLine2D(0, 0, 1, -1);
+        double dst = line.distance(new Point2D.Double(0,0));
+        assertEquals(0, dst, 0.001);
+        dst = line.distance(new Point2D.Double(-1000, 1000));
+        assertEquals(0, dst, 0.001);
+        dst = line.distance(new Point2D.Double(-1, 0));
+        assertEquals(Math.sqrt(2) / 2, dst, 0.001);
+        dst = line.distance(new Point2D.Double(-5, 4));
+        assertEquals(Math.sqrt(2) / 2, dst, 0.001);
+        dst = line.distance(new Point2D.Double(0.5, -0.5));
+        assertEquals(0, dst, 0.001);
+        
+        // testing lines orthogonal to the axis
+        line = new ExtLine2D(0, 0, 15, 0);
+        dst = line.distance(new Point2D.Double(0, 0));
+        assertEquals(0, dst, 0.01);
+        
+        dst = line.distance(new Point2D.Double(132445135, 0));
+        assertEquals(0, dst, 0.01);
+        
+        dst = line.distance(new Point2D.Double(132445135, 0.0001));
+        assertEquals(0.0001, dst, 0.01);
+        
+        line = new ExtLine2D(0, 0, 0, 12);
+        dst = line.distance(new Point2D.Double(0, 0));
+        assertEquals(0, dst, 0.01);
+        
+        dst = line.distance(new Point2D.Double(4.6, 0));
+        assertEquals(4.6, dst, 0.01);      
+        
     }
 }
