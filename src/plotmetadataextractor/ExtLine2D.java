@@ -23,7 +23,8 @@ public class ExtLine2D extends Line2D.Double {
      * @return 
      */
     public static double len(Line2D l) {
-        return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
+        return l.getP1().distance(l.getP2());
+        //return Math.sqrt((l.getX2() - l.getX1()) * (l.getX2() - l.getX1()) + (l.getY2() - l.getY1()) * (l.getY2() - l.getY1()));
         
     }
 

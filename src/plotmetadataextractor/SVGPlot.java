@@ -203,13 +203,6 @@ public class SVGPlot {
                 }
             }
         }
-//        DebugGraphicalOutput debug = DebugGraphicalOutput.getInstance();
-//        
-//        try {
-//            debug.flush(new File("/tmp/out.png"));
-//        } catch (IOException ex) {
-//            Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
-//        }
     }
 
     /**
@@ -232,17 +225,11 @@ public class SVGPlot {
         types.put(PathIterator.SEG_LINETO, "SEG_LINETO");
         types.put(PathIterator.SEG_MOVETO, "SEG_MOVETO");
         types.put(PathIterator.SEG_QUADTO, "SEG_QUADTO");
+
         double coords[] = new double[6];
 
         while (!shapeIt.isDone()) {
-//            System.out.println();
             int segType = shapeIt.currentSegment(coords);
-
-//            System.out.println("Segment type: " + types.get(segType) + "  points: ");
-//            // printing the points:
-//            for (int i = 0; i < 3; ++i) {
-//                System.out.println(" (" + coords[2 * i] + ", " + coords[2 * i + 1] + ")");
-//            }
 
             curPoint = new Point2D.Double(coords[0], coords[1]);
 
