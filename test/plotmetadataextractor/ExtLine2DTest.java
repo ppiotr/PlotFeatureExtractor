@@ -4,7 +4,6 @@ package plotmetadataextractor;
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-
 import java.awt.geom.Point2D;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -135,12 +134,11 @@ public class ExtLine2DTest {
         assertEquals(angle, -45, 0.001);
 
     }
-    
-    
+
     @Test
-    public void testLineDistances(){
+    public void testLineDistances() {
         ExtLine2D line = new ExtLine2D(0, 0, 1, -1);
-        double dst = line.distance(new Point2D.Double(0,0));
+        double dst = line.distance(new Point2D.Double(0, 0));
         assertEquals(0, dst, 0.001);
         dst = line.distance(new Point2D.Double(-1000, 1000));
         assertEquals(0, dst, 0.001);
@@ -150,24 +148,32 @@ public class ExtLine2DTest {
         assertEquals(Math.sqrt(2) / 2, dst, 0.001);
         dst = line.distance(new Point2D.Double(0.5, -0.5));
         assertEquals(0, dst, 0.001);
-        
+
         // testing lines orthogonal to the axis
         line = new ExtLine2D(0, 0, 15, 0);
         dst = line.distance(new Point2D.Double(0, 0));
         assertEquals(0, dst, 0.01);
-        
+
         dst = line.distance(new Point2D.Double(132445135, 0));
         assertEquals(0, dst, 0.01);
-        
+
         dst = line.distance(new Point2D.Double(132445135, 0.0001));
         assertEquals(0.0001, dst, 0.01);
-        
+
         line = new ExtLine2D(0, 0, 0, 12);
         dst = line.distance(new Point2D.Double(0, 0));
         assertEquals(0, dst, 0.01);
-        
+
         dst = line.distance(new Point2D.Double(4.6, 0));
-        assertEquals(4.6, dst, 0.01);      
-        
+        assertEquals(4.6, dst, 0.01);
+
+    }
+
+    @Test
+    public void testGetIntersection() {
+        ExtLine2D line1 = new ExtLine2D(0, 10, 10, 10);
+        ExtLine2D line2 = new ExtLine2D(0, 0, 0, 10);
+        Point2D.Double inter = line1.getIntersection(line2);
+        System.out.println("Hello test");
     }
 }

@@ -7,6 +7,8 @@ package plotmetadataextractor;
 import java.awt.Rectangle;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -37,6 +39,25 @@ public class CoordinateSystem {
     }
 
     /**
+     * Describes parameters of a coordinate system candidate a set of such
+     * objects is then passed through a filter
+     */
+    public static class CoordCandidateParams {
+
+        Pair<ExtLine2D, ExtLine2D> axes;
+        public double linesOutside;
+        public double lengthsRatio;
+        public Pair<AxisTick, AxisTick> axesTicks;
+
+        /**
+         * Transform this minimal description into a full coordinates system
+         */
+        public CoordinateSystem toCoordinateSystem() {
+            return null;
+        }
+    }
+
+    /**
      * Detects all the coordinate systems encoded in a graph
      *
      * @param plot
@@ -45,25 +66,85 @@ public class CoordinateSystem {
     public static List<CoordinateSystem> extractCoordinateSystems(SVGPlot plot) {
         LinkedList<CoordinateSystem> result = new LinkedList<CoordinateSystem>();
 
+        LinkedList<CoordCandidateParams> coordParams = new LinkedList<CoordCandidateParams>();
 
-        HashSet<ExtLine2D> consideredLines = new HashSet<ExtLine2D>();
+        HashSet<ExtLine2D> alreadyConsideredL = new HashSet<ExtLine2D>();
         for (ExtLine2D interval : plot.orthogonalIntervals.keySet()) {
-            consideredLines.add(interval);
+            alreadyConsideredL.add(interval);
             for (ExtLine2D ortInt : plot.orthogonalIntervals.get(interval)) {
-                if (!consideredLines.contains(ortInt)) {
+                if (!alreadyConsideredL.contains(ortInt)) {
                     // we haven't considered this pair yet
-                    Pair<ExtLine2D, ExtLine2D> axisCandidate = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
+                    CoordCandidateParams params = new CoordCandidateParams();
 
-                    double linesOutside = getRatioOfPointsOutside(axisCandidate, plot.points);
+                    params.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
+                    params.linesOutside = getRatioOfPointsOutside(params.axes, plot.points);
                     // calculations based on the line proportions
-                    double lengthsRatio = getAxisLengthRatio(axisCandidate);
-                    Pair<AxisTick, AxisTick> retrieveAxisTicks = retrieveAxisTicks(plot, axisCandidate);
-
-                    System.out.println("Processed a single candidate");
+                    params.lengthsRatio = getAxisLengthRatio(params.axes);
+                    params.axesTicks = retrieveAxisTicks(plot, params.axes);
+                    if (initialFilter(params)) {
+                        coordParams.add(params);
+                    }
                 }
             }
         }
+
+
+        /// we have extracted information about all possible candidates, now we need to determine which ones are the real axes ... 
+
+        LinkedList<CoordCandidateParams> coordinateSystems = CoordinateSystem.filterCandidates(coordParams);
+
+        /// now we need to transform the selected axes into coordinate systems
+
+        for (CoordCandidateParams params : coordinateSystems) {
+            result.add(params.toCoordinateSystem());
+        }
+
         return result;
+
+    }
+
+    /**
+     * An initial heuristic allowing to asses if axis candidate has a chance of
+     * describing axis ... very rough
+     *
+     * @param coordParams
+     * @return
+     */
+    private static boolean initialFilter(CoordCandidateParams params) {
+        return (params.axesTicks.getKey().ticks.size() > 4) && (params.lengthsRatio > 0.7) && (params.lengthsRatio < 1.3);
+
+    }
+
+    /**
+     * Analyse a list of coordinate system candidates and return those which
+     * really describe coordinate systems
+     *
+     * @param coordParams
+     * @return
+     */
+    private static LinkedList<CoordCandidateParams> filterCandidates(LinkedList<CoordCandidateParams> coordParams) {
+        // here we plug a SVM to determine which candidates really describe a coordinates system and which do not
+        Object[] array = coordParams.toArray();
+        Arrays.sort(array, new Comparator<Object>() {
+            @Override
+            public int compare(Object os1, Object os2) {
+                CoordCandidateParams o1 = (CoordCandidateParams) os1;
+                CoordCandidateParams o2 = (CoordCandidateParams) os2;
+                int s1 = o1.axesTicks.getKey().ticks.size() + o1.axesTicks.getValue().ticks.size();
+                int s2 = o2.axesTicks.getKey().ticks.size() + o2.axesTicks.getValue().ticks.size();
+
+                return s2 - s1;
+            }
+        });
+
+        //let's sort by the number of detected ticks
+
+
+
+
+
+        throw new UnsupportedOperationException("Not yet implemented");
+
 
     }
 
@@ -117,6 +198,10 @@ public class CoordinateSystem {
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
             Point2D.Double tickInt = axis.getIntersection(intLine);
             double origDist = tickInt.distance(origin);
+            // we have to figure out the sign ( we want to be able to distinguish points on both sides of the origin
+            // we take a unit vector of the acis as reference
+            Pair<Double, Double> unitVector = axis.getUnitVector();
+            origDist *= Math.signum(ExtLine2D.vecScalarProd(unitVector, ExtLine2D.getVector(origin, tickInt)));
 
             if (Math.abs(origDist - 0.01) > 0) {
                 if (!intersections.containsKey(Math.abs(origDist))) {
@@ -146,7 +231,7 @@ public class CoordinateSystem {
                 double divided = origDst / exDst;
                 if (Math.abs(Math.round(divided) - divided) < toleranceLimit) {
                     // this is a multiplication of the tick
-                    byTick.get(exDst).addAll(intersections.get(exDst));
+                    byTick.get(exDst).addAll(intersections.get(origDst));
                 }
             }
         }
@@ -236,6 +321,7 @@ public class CoordinateSystem {
 
             if (maxBucketSize != null) {
                 Long maxBucket = maximums.get(maxBucketSize);
+                firstMin = maxBucket * unitLen;
                 uniformByTick.get(dst).addAll(histo.get(maxBucket));
                 if (histo.containsKey(maxBucket - 1)) {
                     uniformByTick.get(dst).addAll(histo.get(maxBucket - 1));
@@ -249,17 +335,17 @@ public class CoordinateSystem {
 
                 Long secondMaxSize;
                 try {
-                    secondMaxSize = maximums.floorKey(maxBucket - 1);
+                    secondMaxSize = maximums.floorKey(maxBucketSize - 1);
                 } catch (Exception e) {
                     secondMaxSize = null;
                 }
 
                 if (secondMaxSize != null) {
                     Long secondMaxBucket = maximums.get(secondMaxSize);
-
+                    secondMin = secondMaxBucket * unitLen;
                     uniformByTick.get(dst).addAll(histo.get(secondMaxBucket));
                     if (histo.containsKey(secondMaxBucket - 1)) {
-                        uniformByTick.get(dst).addAll(histo.get(maxBucket - 1));
+                        uniformByTick.get(dst).addAll(histo.get(secondMaxBucket - 1));
                     }
                     if (histo.containsKey(secondMaxBucket + 1)) {
                         uniformByTick.get(dst).addAll(histo.get(secondMaxBucket + 1));

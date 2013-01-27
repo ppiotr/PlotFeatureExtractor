@@ -4,13 +4,8 @@
  */
 package plotmetadataextractor;
 
-import java.awt.Rectangle;
-import java.awt.geom.Point2D;
 import java.io.FileNotFoundException;
-import java.util.HashSet;
 import java.util.List;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 
 /**
  *

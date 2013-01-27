@@ -269,7 +269,7 @@ public class SVGPlot {
      * @param p2
      * @return
      */
-    private ExtLine2D buildLineFromPoints(Point2D p1, Point2D p2) {
+    public static ExtLine2D buildLineFromPoints(Point2D p1, Point2D p2) {
         // we have a linear segment created... now we only have to put order on the 
         // points - we want to have the point starting from the left-most point ... if equal,
         // at the bottom

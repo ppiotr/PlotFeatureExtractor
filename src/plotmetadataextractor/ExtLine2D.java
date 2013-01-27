@@ -77,25 +77,29 @@ public class ExtLine2D extends Line2D.Double {
      * @param line
      * @return
      */
-    public static Point2D.Double getIntersection(Line2D.Double l1, Line2D.Double l2) {
-        LineParameters lp1 = ExtLine2D.getLineEquation(l1);
-        LineParameters lp2 = ExtLine2D.getLineEquation(l2);
-        double den = lp2.a * lp1.b - lp1.a * lp2.b;
-
-        if (den == 0) {
-            // there are no answers - lines are parallel or colinear
-            if (lp1.a == lp2.a && lp1.b == lp2.b && lp1.c == lp2.c) {
-                // collinear ... determine if there exists a common point and return it
-                return new Point2D.Double(l1.getX1(), l1.getY1());
-            } else {
-                return null;
-            }
-        }
-
-        double x = (lp1.c * lp2.b) - (lp2.c * lp1.b) / den;
-        double y = (-lp2.c - lp2.a * x) / lp2.b;
-
-        return new Point2D.Double(x, y);
+    public static Point2D.Double getIntersection(ExtLine2D l1, ExtLine2D l2) {
+        Pair<java.lang.Double, java.lang.Double> uv1 = l1.getUnitVector();
+        double dist = l2.distance((Point2D.Double) l1.getP1());
+        return new Point2D.Double(l1.getP1().getX() + uv1.getKey() * dist, l1.getP1().getY() + uv1.getValue() * dist);
+//        
+//        LineParameters lp1 = ExtLine2D.getLineEquation(l1);
+//        LineParameters lp2 = ExtLine2D.getLineEquation(l2);
+//        double den = lp2.a * lp1.b - lp1.a * lp2.b;
+//
+//        if (den == 0) {
+//            // there are no answers - lines are parallel or colinear
+//            if (lp1.a == lp2.a && lp1.b == lp2.b && lp1.c == lp2.c) {
+//                // collinear ... determine if there exists a common point and return it
+//                return new Point2D.Double(l1.getX1(), l1.getY1());
+//            } else {
+//                return null;
+//            }
+//        }
+//
+//        double x = (lp1.c * lp2.b) - (lp2.c * lp1.b) / den;
+//        double y = (-lp2.c - lp2.a * x) / lp2.b;
+//
+//        return new Point2D.Double(x, y);
     }
 
     /**
@@ -160,7 +164,7 @@ public class ExtLine2D extends Line2D.Double {
      * @param line
      * @return
      */
-    public Point2D.Double getIntersection(Line2D.Double line) {
+    public Point2D.Double getIntersection(ExtLine2D line) {
         return ExtLine2D.getIntersection(this, line);
     }
 
@@ -243,11 +247,20 @@ public class ExtLine2D extends Line2D.Double {
      * understand not the
      */
     public double distance(Point2D.Double point) {
+        return ExtLine2D.distance(point, this);
+    }
 
-        Pair<java.lang.Double, java.lang.Double> vn = this.getUnitVector();
-        Pair<java.lang.Double, java.lang.Double> w = getVector(point, (Point2D.Double) this.getP2());
+    public static double distance(Point2D.Double point, ExtLine2D line) {
+        Pair<java.lang.Double, java.lang.Double> vn = line.getUnitVector();
+        Pair<java.lang.Double, java.lang.Double> w = getVector(point, (Point2D.Double) line.getP2());
         Pair<java.lang.Double, java.lang.Double> ortho = vecSub(w, vecMul(vecScalarProd(w, vn), vn));
         return vecLen(ortho);
-
     }
+
+    /**
+     * Returns a human-friendly representation of the object
+     */
+    public String toString() {
+        return "ExtLine2D((" +  String.valueOf(this.getX1()) + "," + String.valueOf(this.getY1()) + ")-- ( " + String.valueOf(this.getX2())+","+ String.valueOf(this.getY2())+") hash=" + String.valueOf(this.hashCode()) + ")";
+    } 
 }
