@@ -26,8 +26,8 @@ public class DebugGraphicalOutput {
     private DebugGraphicalOutput() {
         this.width = 1000;
         this.height = 1000;
-        this.image = new BufferedImage(this.width, this.height, BufferedImage.TYPE_INT_RGB);
-        this.graphics = (Graphics2D) this.image.getGraphics();
+        //this.image = new BufferedImage(this.width, this.height, BufferedImage.TYPE_INT_RGB);
+        //this.graphics = (Graphics2D) this.image.getGraphics();
         this.reset();
     }
 
@@ -50,6 +50,8 @@ public class DebugGraphicalOutput {
      * Resets the content of the image
      */
     public final void reset() {
+        this.image = new BufferedImage(this.width, this.height, BufferedImage.TYPE_INT_RGB);
+        this.graphics = (Graphics2D) this.image.getGraphics();
         this.graphics.fillRect(0, 0, this.width, this.height);
         this.graphics.setBackground(Color.WHITE);
         this.graphics.setColor(Color.BLACK);

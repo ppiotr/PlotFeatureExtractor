@@ -4,17 +4,21 @@
  */
 package plotmetadataextractor;
 
+import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -24,10 +28,11 @@ import org.apache.commons.lang3.tuple.Pair;
  */
 public class CoordinateSystem {
 
+    private static double precission = 0.01;
     Line2D axe1;
     Line2D axe2;
-    Map<Double, Line2D> ticks1; // ticks on the 1st axis
-    Map<Double, Line2D> ticks2; // ticks on the 2nd axis ... mapping the point with the 
+    DoubleTreeMap<Line2D> ticks1; // ticks on the 1st axis
+    DoubleTreeMap<Line2D> ticks2; // ticks on the 2nd axis ... mapping the point with the 
 
     /**
      * Returns the same coordinate axis with the axis meaning inverted
@@ -137,6 +142,35 @@ public class CoordinateSystem {
             }
         });
 
+
+
+        // let's draw best 10 !
+
+        DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
+        for (int i = 0; i < 500; i++) {
+            dgo.reset();
+            dgo.graphics.setColor(Color.red);
+            
+            // drawing the first axis
+            CoordCandidateParams par = (CoordCandidateParams) array[i];
+            dgo.graphics.draw(par.axes.getKey());
+            for (ExtLine2D line: par.axesTicks.getKey().ticks.values()){
+                dgo.graphics.draw(line);
+            }
+            
+            dgo.graphics.setColor(Color.blue);
+            dgo.graphics.draw(par.axes.getValue());
+            for (ExtLine2D line: par.axesTicks.getValue().ticks.values()){
+                dgo.graphics.draw(line);
+            }
+            try {
+                dgo.flush(new File("/tmp/detected_" + String.valueOf(i) + ".png"));
+            } catch (IOException ex) {
+                Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+
         //let's sort by the number of detected ticks
 
 
@@ -160,7 +194,7 @@ public class CoordinateSystem {
          * should detect
          */
         public double majorTick;
-        public Map<Double, ExtLine2D> ticks;
+        public DoubleTreeMap<ExtLine2D> ticks;
     }
 
     /**
@@ -251,11 +285,8 @@ public class CoordinateSystem {
          */
         double eqFraction = 0.01; // difference of 1% of the adjacent axis counts like being equal
         double unitLen = adjAxisLen * eqFraction;
-        TreeMap<Double, List<Pair<ExtLine2D, Double>>> uniformByTick = new TreeMap<Double, List<Pair<ExtLine2D, Double>>>();
-        TreeMap<Double, Pair<Double, Double>> uniformByTickLengths = new TreeMap<Double, Pair<Double, Double>>();
-
-        uniformByTickLengths = new TreeMap<Double, Pair<Double, Double>>();
-
+        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> uniformByTick = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
+        DoubleTreeMap<Pair<Double, Double>> uniformByTickLengths = new DoubleTreeMap<Pair<Double, Double>>(CoordinateSystem.precission);
 
 
 
@@ -372,12 +403,14 @@ public class CoordinateSystem {
 
         minDists = uniformByTickLengths.get(maxTick);
         if (minDists == null) {
-            System.out.println("ups");
+            System.out.println("ups - there is no minimals distance for this axis candidate");
             minDists = new ImmutablePair<java.lang.Double, java.lang.Double>(0.0, 0.0);
         }
+
+
         AxisTick res = new AxisTick();
         res.minorTick = maxTick;
-        res.ticks = new TreeMap<Double, ExtLine2D>();
+        res.ticks = new DoubleTreeMap<ExtLine2D>(CoordinateSystem.precission);
         res.majorTick = minDists.getValue();
 
         if (uniformByTick.get(maxTick) != null) {
