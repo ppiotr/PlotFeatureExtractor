@@ -260,6 +260,7 @@ public class ExtLine2D extends Line2D.Double {
     /**
      * Returns a human-friendly representation of the object
      */
+    @Override
     public String toString() {
         return "ExtLine2D((" +  String.valueOf(this.getX1()) + "," + String.valueOf(this.getY1()) + ")-- ( " + String.valueOf(this.getX2())+","+ String.valueOf(this.getY2())+") hash=" + String.valueOf(this.hashCode()) + ")";
     } 
