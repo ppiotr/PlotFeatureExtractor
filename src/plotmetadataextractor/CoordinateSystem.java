@@ -28,7 +28,7 @@ import org.apache.commons.lang3.tuple.Pair;
  */
 public class CoordinateSystem {
 
-    private static double precission = 0.01;
+    private static double precission = 4;
     Line2D axe1;
     Line2D axe2;
     DoubleTreeMap<Line2D> ticks1; // ticks on the 1st axis
@@ -142,25 +142,23 @@ public class CoordinateSystem {
             }
         });
 
-
-
         // let's draw best 10 !
 
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
         for (int i = 0; i < 500; i++) {
             dgo.reset();
             dgo.graphics.setColor(Color.red);
-            
+
             // drawing the first axis
             CoordCandidateParams par = (CoordCandidateParams) array[i];
             dgo.graphics.draw(par.axes.getKey());
-            for (ExtLine2D line: par.axesTicks.getKey().ticks.values()){
+            for (ExtLine2D line : par.axesTicks.getKey().ticks.values()) {
                 dgo.graphics.draw(line);
             }
-            
+
             dgo.graphics.setColor(Color.blue);
             dgo.graphics.draw(par.axes.getValue());
-            for (ExtLine2D line: par.axesTicks.getValue().ticks.values()){
+            for (ExtLine2D line : par.axesTicks.getValue().ticks.values()) {
                 dgo.graphics.draw(line);
             }
             try {
@@ -173,12 +171,7 @@ public class CoordinateSystem {
 
         //let's sort by the number of detected ticks
 
-
-
-
-
         throw new UnsupportedOperationException("Not yet implemented");
-
 
     }
 
@@ -225,10 +218,9 @@ public class CoordinateSystem {
                 retrieveAxisTick(a2, plot, origin, a1.len()));
     }
 
-    public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, double adjAxisLen) {
-        double toleranceLimit = 0.05;
-        TreeMap<Double, List<Pair<ExtLine2D, Double>>> intersections = new TreeMap<Double, List<Pair<ExtLine2D, Double>>>();
-        // first we process all the intersecting lines and calculate their distance from the origin
+    private static DoubleTreeMap<List<Pair<ExtLine2D, Double>>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
+        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> intersections = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
+
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
             Point2D.Double tickInt = axis.getIntersection(intLine);
             double origDist = tickInt.distance(origin);
@@ -244,15 +236,23 @@ public class CoordinateSystem {
                 intersections.get(Math.abs(origDist)).add(new ImmutablePair<ExtLine2D, Double>(intLine, origDist));
             }
         }
+        return intersections;
+    }
 
-        /*
-         * Now let's put ticks in buckets - aggregating by every distance which
-         * multiplied by an integer can give the given distance (approximately,
-         * with a given tolerance expressed as a fraction of the basic tick)
-         */
-
-        // list of lines in distance from the origin being integer multiplication of the key
-        TreeMap<Double, List<Pair<ExtLine2D, Double>>> byTick = new TreeMap<Double, List<Pair<ExtLine2D, Double>>>();
+    /**
+     * Puts ticks in buckets - aggregating by every distance which multiplied by
+     * an integer can give the given distance (approximately, with a given
+     * tolerance expressed as a fraction of the basic tick)
+     *
+     * @param intersections
+     * @param toleranceLimit
+     * @return
+     */
+    
+    private static DoubleTreeMap<List<Pair<ExtLine2D, Double>>> ticksAggregateByMinimalDistance(
+            TreeMap<Double, List<Pair<ExtLine2D, Double>>> intersections,
+            double toleranceLimit) {
+        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
 
         for (Double origDst : intersections.keySet()) {
             if (!byTick.containsKey(origDst)) {
@@ -269,6 +269,15 @@ public class CoordinateSystem {
                 }
             }
         }
+        return byTick;
+    }
+
+    public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, double adjAxisLen) {
+        double toleranceLimit = 2;
+    
+        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> intersections = CoordinateSystem.ticksCalculateOriginDist(axis, plot, origin);
+
+        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick = CoordinateSystem.ticksAggregateByMinimalDistance(intersections, toleranceLimit);
 
         /**
          * Now we have to make sure that the ticks are more or less uniform. For

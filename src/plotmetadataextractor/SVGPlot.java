@@ -8,12 +8,14 @@ import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
+import java.awt.Stroke;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -66,15 +68,14 @@ public class SVGPlot {
             CompositeGraphicsNode n;
             AffineTransform t;
             Point.Float p = new Point.Float();
-
             addGraphicsNode(i);
+            this.removeDuplicateLines(0.01);
             this.calculateOrthogonalIntervals();
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
             // ...
         }
     }
-
 
     public void calculateOrthogonalIntervals() {
         System.out.println("Processing line intervals");
@@ -131,32 +132,36 @@ public class SVGPlot {
             DebugGraphicalOutput dout = DebugGraphicalOutput.getInstance();
             dout.flush(new File("/tmp/out2.png"));
 
+            int i = 0;
+            HashSet<ExtLine2D> used = new HashSet<ExtLine2D>();
 
-            Random r = new Random();
             for (ExtLine2D line : intersecting.keySet()) {
-                if (r.nextInt(300) == 0) {
-                    //we search for the longest intersecting and draw intersecting with this one
+                dout.reset();
+                //we search for the longest intersecting and draw intersecting with this one
 
-                    ExtLine2D winner = line;
+                ExtLine2D winner = line;
 
-                    for (ExtLine2D inter : intersecting.get(line)) {
-                        if (inter.len() > winner.len()) {
-                            winner = inter;
-                        }
+                for (ExtLine2D inter : intersecting.get(line)) {
+                    if (inter.len() > winner.len()) {
+                        winner = inter;
                     }
+                }
 
-                    // now drawing the winner
-                    dout.graphics.setColor(new Color(r.nextInt(256), r.nextInt(256), r.nextInt(256)));
-                    Rectangle bounds = winner.getBounds();
-                    dout.graphics.draw(bounds);
-
+                // now drawing the winner
+                if (!used.contains(winner)) {
+                    used.add(winner);
+                    dout.graphics.setColor(Color.BLUE);
+                    
                     for (ExtLine2D inter : intersecting.get(winner)) {
                         dout.graphics.draw(inter.getBounds());
                     }
 
+                    dout.graphics.setColor(Color.RED);
+                    dout.graphics.draw(winner);
+                    dout.flush(new File("/tmp/ortho_" + String.valueOf(i) + ".png"));
+                    i++;
                 }
             }
-            dout.flush(new File("/tmp/out3.png"));
         } catch (IOException ex) {
             Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -286,5 +291,78 @@ public class SVGPlot {
         }
 
         return new ExtLine2D(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+    }
+
+    public static class ApproximateLinesContainer {
+
+        DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<ExtLine2D>>>> lines;
+        private double precission;
+
+        public ApproximateLinesContainer(double precission) {
+            this.lines = new DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<ExtLine2D>>>>(precission);
+            this.precission = precission;
+        }
+
+        public void addLine(ExtLine2D line) {
+
+            if (!this.lines.containsKey(line.getX1())) {
+                this.lines.put(line.getX1(), new DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<ExtLine2D>>>(this.precission));
+
+            }
+            DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<ExtLine2D>>> m1 = this.lines.get(line.getX1());
+            if (!m1.containsKey(line.getY1())) {
+                m1.put(line.getY1(), new DoubleTreeMap<DoubleTreeMap<ExtLine2D>>(this.precission));
+            }
+            DoubleTreeMap<DoubleTreeMap<ExtLine2D>> m2 = m1.get(line.getY1());
+            if (!m2.containsKey(line.getX2())) {
+                m2.put(line.getX2(), new DoubleTreeMap<ExtLine2D>(this.precission));
+            }
+            DoubleTreeMap<ExtLine2D> m3 = m2.get(line.getX2());
+
+            m3.put(line.getY2(), line);
+        }
+
+        public boolean hasLine(ExtLine2D line) {
+            DoubleTreeMap<DoubleTreeMap<DoubleTreeMap<ExtLine2D>>> m1 = this.lines.get(line.getX1());
+            if (m1 == null) {
+                return false;
+            }
+            DoubleTreeMap<DoubleTreeMap<ExtLine2D>> m2 = m1.get(line.getY1());
+            if (m2 == null) {
+                return false;
+            }
+            DoubleTreeMap<ExtLine2D> m3 = m2.get(line.getX2());
+            if (m3 == null) {
+                return false;
+            }
+            ExtLine2D m4 = m3.get(line.getY2());
+            if (m4 == null) {
+                return false;
+            }
+            return true;
+        }
+    }
+
+    /**
+     * Removes all lines which can be considered redundant (using the precision
+     * argument)
+     *
+     * @param precission
+     */
+    public void removeDuplicateLines(double precission) {
+        List<ExtLine2D> result = new LinkedList<ExtLine2D>();
+        int numRemoved = 0;
+        // we will be indexing with a given precission using coordinates of the beginning and the end
+        ApproximateLinesContainer alc = new ApproximateLinesContainer(precission);
+        for (ExtLine2D line : this.lineSegments) {
+            if (!alc.hasLine(line)) {
+                alc.addLine(line);
+                result.add(line);
+            } else {
+                numRemoved++;
+            }
+        }
+        this.lineSegments = result;
+        System.out.println("Removed " + String.valueOf(numRemoved) + " line segments which have been detected as redundant");
     }
 }
