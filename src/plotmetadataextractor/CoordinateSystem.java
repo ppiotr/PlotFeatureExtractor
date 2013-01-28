@@ -32,7 +32,7 @@ public class CoordinateSystem {
     Line2D axe1;
     Line2D axe2;
     DoubleTreeMap<Line2D> ticks1; // ticks on the 1st axis
-    DoubleTreeMap<Line2D> ticks2; // ticks on the 2nd axis ... mapping the point with the 
+    DoubleTreeMap<Line2D> ticks2; // ticks on the 2nd axis ... mapping the point with the
 
     /**
      * Returns the same coordinate axis with the axis meaning inverted
@@ -94,9 +94,9 @@ public class CoordinateSystem {
         }
 
 
-        /// we have extracted information about all possible candidates, now we need to determine which ones are the real axes ... 
+        /// we have extracted information about all possible candidates, now we need to determine which ones are the real axes ...
 
-        LinkedList<CoordCandidateParams> coordinateSystems = CoordinateSystem.filterCandidates(coordParams);
+        LinkedList<CoordCandidateParams> coordinateSystems = CoordinateSystem.filterCandidates(coordParams, plot);
 
         /// now we need to transform the selected axes into coordinate systems
 
@@ -127,7 +127,7 @@ public class CoordinateSystem {
      * @param coordParams
      * @return
      */
-    private static LinkedList<CoordCandidateParams> filterCandidates(LinkedList<CoordCandidateParams> coordParams) {
+    private static LinkedList<CoordCandidateParams> filterCandidates(LinkedList<CoordCandidateParams> coordParams, SVGPlot plot) {
         // here we plug a SVM to determine which candidates really describe a coordinates system and which do not
         Object[] array = coordParams.toArray();
         Arrays.sort(array, new Comparator<Object>() {
@@ -166,6 +166,7 @@ public class CoordinateSystem {
             } catch (IOException ex) {
                 Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
             }
+            CoordinateSystem.retrieveAxisTicks(plot, par.axes);
         }
 
 
@@ -248,7 +249,6 @@ public class CoordinateSystem {
      * @param toleranceLimit
      * @return
      */
-    
     private static DoubleTreeMap<List<Pair<ExtLine2D, Double>>> ticksAggregateByMinimalDistance(
             TreeMap<Double, List<Pair<ExtLine2D, Double>>> intersections,
             double toleranceLimit) {
@@ -272,13 +272,44 @@ public class CoordinateSystem {
         return byTick;
     }
 
+    /**
+     * Creates a histogram aggregating ticks by the minimal lengths they belong
+     *
+     *
+     * @param byTick
+     * @param minDistance
+     * @param dst
+     * @param unitLen
+     * @return
+     */
+    private static TreeMap<Long, List<Pair<ExtLine2D, Double>>> createLengthsHistogram(DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick, HashMap<Long, Double> minDistance, double dst, double unitLen) {
+        TreeMap<Long, List<Pair<ExtLine2D, Double>>> histo = new TreeMap<Long, List<Pair<ExtLine2D, Double>>>();
+        // describes the minimum distance from the origin for a given tick length
+
+        for (Pair<ExtLine2D, Double> tickPair : byTick.get(dst)) {
+            ExtLine2D tick = tickPair.getKey();
+
+            double length = tick.getP1().distance(tick.getP2());
+            long bucketNum = Math.round(length / unitLen);
+
+            Double dist = Math.abs(tickPair.getValue());
+            if (!minDistance.containsKey(bucketNum) || dst < minDistance.get(bucketNum)) {
+                minDistance.put(bucketNum, dist);
+            }
+
+            if (!histo.containsKey(bucketNum)) {
+                histo.put(bucketNum, new LinkedList<Pair<ExtLine2D, Double>>());
+            }
+            histo.get(bucketNum).add(tickPair);
+        }
+        return histo;
+    }
+
     public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, double adjAxisLen) {
-        double toleranceLimit = 2;
-    
+        double toleranceLimit = 4;
+
         DoubleTreeMap<List<Pair<ExtLine2D, Double>>> intersections = CoordinateSystem.ticksCalculateOriginDist(axis, plot, origin);
-
         DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick = CoordinateSystem.ticksAggregateByMinimalDistance(intersections, toleranceLimit);
-
         /**
          * Now we have to make sure that the ticks are more or less uniform. For
          * every tick we select two most common line lengths and filter out the
@@ -292,42 +323,16 @@ public class CoordinateSystem {
          * intersecting axis candidate. The second axis is always classified as
          * a tick, regardless its length )
          */
-        double eqFraction = 0.01; // difference of 1% of the adjacent axis counts like being equal
+        double eqFraction = 0.002; // difference of 1% of the adjacent axis counts like being equal
         double unitLen = adjAxisLen * eqFraction;
         DoubleTreeMap<List<Pair<ExtLine2D, Double>>> uniformByTick = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
         DoubleTreeMap<Pair<Double, Double>> uniformByTickLengths = new DoubleTreeMap<Pair<Double, Double>>(CoordinateSystem.precission);
 
-
-
         for (Double dst : byTick.keySet()) {
             //let's create a histogram of ticks
-            TreeMap<Long, List<Pair<ExtLine2D, Double>>> histo =
-                    new TreeMap<Long, List<Pair<ExtLine2D, Double>>>();
-
-            // describes the minimum distance from the origin for a given tick length
             HashMap<Long, Double> minDistance = new HashMap<Long, Double>();
+            TreeMap<Long, List<Pair<ExtLine2D, Double>>> histo = CoordinateSystem.createLengthsHistogram(byTick, minDistance, dst.doubleValue(), unitLen);
 
-            for (Pair<ExtLine2D, Double> tickPair : byTick.get(dst)) {
-                ExtLine2D tick = tickPair.getKey();
-
-
-
-
-                double length = tick.getP1().distance(tick.getP2());
-                long bucketNum = Math.round(length / unitLen);
-
-
-
-                Double dist = Math.abs(tickPair.getValue());
-                if (!minDistance.containsKey(bucketNum) || dst < minDistance.get(bucketNum)) {
-                    minDistance.put(bucketNum, dist);
-                }
-
-                if (!histo.containsKey(bucketNum)) {
-                    histo.put(bucketNum, new LinkedList<Pair<ExtLine2D, Double>>());
-                }
-                histo.get(bucketNum).add(tickPair);
-            }
 
             /**
              * Now we read the histogram and select two buckets containing the
@@ -335,7 +340,7 @@ public class CoordinateSystem {
              * length. ... we also assume that different lengths of ticks will
              * be distant enough
              */
-            TreeMap<Long, Long> maximums = new TreeMap<Long, Long>(); // a queue number of elements -> centre
+            TreeMap<Long, List<Long>> maximums = new TreeMap<Long, List<Long>>(); // a queue number of elements -> centre
 
             for (Long bucket : histo.keySet()) {
                 long numEl = histo.get(bucket).size();
@@ -345,7 +350,10 @@ public class CoordinateSystem {
                 if (histo.containsKey(bucket + 1)) {
                     numEl += histo.get(bucket + 1).size();
                 }
-                maximums.put(numEl, bucket);
+                if (!maximums.containsKey(numEl)) {
+                    maximums.put(numEl, new LinkedList<Long>());
+                }
+                maximums.get(numEl).add(bucket);
             }
 
             // now read two maximal values and copy the pairs into the final structure
@@ -360,7 +368,8 @@ public class CoordinateSystem {
             }
 
             if (maxBucketSize != null) {
-                Long maxBucket = maximums.get(maxBucketSize);
+                List<Long> maxList = maximums.get(maxBucketSize);
+                Long maxBucket = maxList.get(0);
                 firstMin = maxBucket * unitLen;
                 uniformByTick.get(dst).addAll(histo.get(maxBucket));
                 if (histo.containsKey(maxBucket - 1)) {
@@ -370,18 +379,25 @@ public class CoordinateSystem {
                     uniformByTick.get(dst).addAll(histo.get(maxBucket + 1));
                 }
 
-
-
-
                 Long secondMaxSize;
-                try {
-                    secondMaxSize = maximums.floorKey(maxBucketSize - 1);
-                } catch (Exception e) {
-                    secondMaxSize = null;
+                Long secondMaxBucket = null;
+
+
+                if (maxList.size() > 1) {
+                    secondMaxBucket = maxList.get(1);
+                } else {
+                    try {
+                        secondMaxSize = maximums.floorKey(maxBucketSize - 1);
+                    } catch (Exception e) {
+                        secondMaxSize = null;
+                    }
+
+                    if (secondMaxSize != null){
+                        secondMaxBucket = maximums.get(secondMaxSize).get(0);
+                    }
                 }
 
-                if (secondMaxSize != null) {
-                    Long secondMaxBucket = maximums.get(secondMaxSize);
+                if (secondMaxBucket != null) {
                     secondMin = secondMaxBucket * unitLen;
                     uniformByTick.get(dst).addAll(histo.get(secondMaxBucket));
                     if (histo.containsKey(secondMaxBucket - 1)) {
@@ -397,6 +413,7 @@ public class CoordinateSystem {
 
             uniformByTickLengths.put(dst, new ImmutablePair<Double, Double>(firstMin, secondMin));
         }
+
 
         // now select the distance having the most ticks
         long maxNum = 0;
