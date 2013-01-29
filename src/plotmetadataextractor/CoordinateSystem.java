@@ -62,6 +62,35 @@ public class CoordinateSystem {
         }
     }
 
+    public static class Tick {
+
+        public ExtLine2D line;
+        public Point2D.Double intersection; // intersection with the axis
+        public double length;
+        public double distanceFromTheOrigin;
+        public boolean isMajor;
+
+        public Tick(ExtLine2D line, Point2D.Double intersect, double distance) {
+            this.line = line;
+            this.intersection = intersect;
+            this.distanceFromTheOrigin = distance;
+            this.length = line.getP1().distance(line.getP2());
+            this.isMajor = false;
+        }
+
+        public Tick(ExtLine2D line, ExtLine2D axis, Point2D.Double origin) {
+            this.line = line;
+            this.intersection = line.getIntersection(axis);
+            
+            this.distanceFromTheOrigin = line.distance(origin);
+            Pair<Double, Double> unitVector = axis.getUnitVector();
+            this.distanceFromTheOrigin *= Math.signum(ExtLine2D.vecScalarProd(unitVector, ExtLine2D.getVector(origin, this.intersection)));
+            
+            this.length = line.getP1().distance(line.getP2());
+            this.isMajor = false;
+        }
+    }
+
     /**
      * Detects all the coordinate systems encoded in a graph
      *
@@ -152,14 +181,14 @@ public class CoordinateSystem {
             // drawing the first axis
             CoordCandidateParams par = (CoordCandidateParams) array[i];
             dgo.graphics.draw(par.axes.getKey());
-            for (ExtLine2D line : par.axesTicks.getKey().ticks.values()) {
-                dgo.graphics.draw(line);
+            for (Tick tick : par.axesTicks.getKey().ticks.values()) {
+                dgo.graphics.draw(tick.line);
             }
 
             dgo.graphics.setColor(Color.blue);
             dgo.graphics.draw(par.axes.getValue());
-            for (ExtLine2D line : par.axesTicks.getValue().ticks.values()) {
-                dgo.graphics.draw(line);
+            for (Tick tick : par.axesTicks.getValue().ticks.values()) {
+                dgo.graphics.draw(tick.line);
             }
             try {
                 dgo.flush(new File("/tmp/detected_" + String.valueOf(i) + ".png"));
@@ -183,12 +212,11 @@ public class CoordinateSystem {
 
         public double minorTick;
         /**
-         * sometimes there are ticks which are longer, btu stll repeat regularly
+         * sometimes there are ticks which are longer, but still repeat regularly
          * every N smaller ticks. These usually are marked with labels which we
          * should detect
          */
-        public double majorTick;
-        public DoubleTreeMap<ExtLine2D> ticks;
+        public DoubleTreeMap<Tick> ticks;
     }
 
     /**
@@ -219,22 +247,24 @@ public class CoordinateSystem {
                 retrieveAxisTick(a2, plot, origin, a1.len()));
     }
 
-    private static DoubleTreeMap<List<Pair<ExtLine2D, Double>>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
-        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> intersections = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
-
+    /**
+     * In this case we return an exact tree map rather than approximate !
+     *
+     * @param axis
+     * @param plot
+     * @param origin
+     * @return
+     */
+    private static TreeMap<Double, List<Tick>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
+        TreeMap<Double, List<Tick>> intersections = new TreeMap<Double, List<Tick>>();
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
-            Point2D.Double tickInt = axis.getIntersection(intLine);
-            double origDist = tickInt.distance(origin);
-            // we have to figure out the sign ( we want to be able to distinguish points on both sides of the origin
-            // we take a unit vector of the acis as reference
-            Pair<Double, Double> unitVector = axis.getUnitVector();
-            origDist *= Math.signum(ExtLine2D.vecScalarProd(unitVector, ExtLine2D.getVector(origin, tickInt)));
-
-            if (Math.abs(origDist - 0.01) > 0) {
-                if (!intersections.containsKey(Math.abs(origDist))) {
-                    intersections.put(Math.abs(origDist), new LinkedList<Pair<ExtLine2D, Double>>());
-                }
-                intersections.get(Math.abs(origDist)).add(new ImmutablePair<ExtLine2D, Double>(intLine, origDist));
+            Point2D.Double tickInt = axis.getIntersection(intLine);            
+            Tick tick = new Tick(intLine, axis, origin);            
+            if (Math.abs(tick.distanceFromTheOrigin - 0.01) > 0) {
+                if (!intersections.containsKey(Math.abs(tick.distanceFromTheOrigin))) {
+                    intersections.put(Math.abs(tick.distanceFromTheOrigin), new LinkedList<Tick>());
+                }                
+                intersections.get(Math.abs(tick.distanceFromTheOrigin)).add(tick);
             }
         }
         return intersections;
@@ -249,21 +279,21 @@ public class CoordinateSystem {
      * @param toleranceLimit
      * @return
      */
-    private static DoubleTreeMap<List<Pair<ExtLine2D, Double>>> ticksAggregateByMinimalDistance(
-            TreeMap<Double, List<Pair<ExtLine2D, Double>>> intersections,
+    private static DoubleTreeMap<List<Tick>> ticksAggregateByMinimalDistance(
+            TreeMap<Double, List<Tick>> intersections,
             double toleranceLimit) {
-        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
+        DoubleTreeMap<List<Tick>> byTick = new DoubleTreeMap<List<Tick>>(CoordinateSystem.precission);
 
         for (Double origDst : intersections.keySet()) {
             if (!byTick.containsKey(origDst)) {
-                byTick.put(origDst, new LinkedList<Pair<ExtLine2D, Double>>());
+                byTick.put(origDst, new LinkedList<Tick>());
             }
 
             // let's check the already added ticks (in any order as they will be <= to this one
 
             for (Double exDst : byTick.keySet()) {
                 double divided = origDst / exDst;
-                if (Math.abs(Math.round(divided) - divided) < toleranceLimit) {
+                if (Math.abs(Math.round(divided) * exDst - origDst) < toleranceLimit) {
                     // this is a multiplication of the tick
                     byTick.get(exDst).addAll(intersections.get(origDst));
                 }
@@ -277,30 +307,23 @@ public class CoordinateSystem {
      *
      *
      * @param byTick
-     * @param minDistance
      * @param dst
      * @param unitLen
      * @return
      */
-    private static TreeMap<Long, List<Pair<ExtLine2D, Double>>> createLengthsHistogram(DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick, HashMap<Long, Double> minDistance, double dst, double unitLen) {
-        TreeMap<Long, List<Pair<ExtLine2D, Double>>> histo = new TreeMap<Long, List<Pair<ExtLine2D, Double>>>();
+    private static TreeMap<Long, List<Tick>> createLengthsHistogram(DoubleTreeMap<List<Tick>> byTick, double dst, double unitLen) {
+        TreeMap<Long, List<Tick>> histo = new TreeMap<Long, List<Tick>>();
         // describes the minimum distance from the origin for a given tick length
 
-        for (Pair<ExtLine2D, Double> tickPair : byTick.get(dst)) {
-            ExtLine2D tick = tickPair.getKey();
+        for (Tick tick : byTick.get(dst)) {
+            long bucketNum = Math.round(tick.length / unitLen);
 
-            double length = tick.getP1().distance(tick.getP2());
-            long bucketNum = Math.round(length / unitLen);
-
-            Double dist = Math.abs(tickPair.getValue());
-            if (!minDistance.containsKey(bucketNum) || dst < minDistance.get(bucketNum)) {
-                minDistance.put(bucketNum, dist);
-            }
-
+            Double dist = Math.abs(tick.distanceFromTheOrigin);
+            
             if (!histo.containsKey(bucketNum)) {
-                histo.put(bucketNum, new LinkedList<Pair<ExtLine2D, Double>>());
+                histo.put(bucketNum, new LinkedList<Tick>());
             }
-            histo.get(bucketNum).add(tickPair);
+            histo.get(bucketNum).add(tick);
         }
         return histo;
     }
@@ -308,8 +331,8 @@ public class CoordinateSystem {
     public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, double adjAxisLen) {
         double toleranceLimit = 4;
 
-        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> intersections = CoordinateSystem.ticksCalculateOriginDist(axis, plot, origin);
-        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> byTick = CoordinateSystem.ticksAggregateByMinimalDistance(intersections, toleranceLimit);
+        TreeMap<Double, List<Tick>> intersections = CoordinateSystem.ticksCalculateOriginDist(axis, plot, origin);
+        DoubleTreeMap<List<Tick>> byTick = CoordinateSystem.ticksAggregateByMinimalDistance(intersections, toleranceLimit);
         /**
          * Now we have to make sure that the ticks are more or less uniform. For
          * every tick we select two most common line lengths and filter out the
@@ -325,13 +348,11 @@ public class CoordinateSystem {
          */
         double eqFraction = 0.002; // difference of 1% of the adjacent axis counts like being equal
         double unitLen = adjAxisLen * eqFraction;
-        DoubleTreeMap<List<Pair<ExtLine2D, Double>>> uniformByTick = new DoubleTreeMap<List<Pair<ExtLine2D, Double>>>(CoordinateSystem.precission);
-        DoubleTreeMap<Pair<Double, Double>> uniformByTickLengths = new DoubleTreeMap<Pair<Double, Double>>(CoordinateSystem.precission);
+        DoubleTreeMap<List<Tick>> uniformByTick = new DoubleTreeMap<List<Tick>>(CoordinateSystem.precission);
 
         for (Double dst : byTick.keySet()) {
             //let's create a histogram of ticks
-            HashMap<Long, Double> minDistance = new HashMap<Long, Double>();
-            TreeMap<Long, List<Pair<ExtLine2D, Double>>> histo = CoordinateSystem.createLengthsHistogram(byTick, minDistance, dst.doubleValue(), unitLen);
+            TreeMap<Long, List<Tick>> histo = CoordinateSystem.createLengthsHistogram(byTick, dst.doubleValue(), unitLen);
 
 
             /**
@@ -344,12 +365,6 @@ public class CoordinateSystem {
 
             for (Long bucket : histo.keySet()) {
                 long numEl = histo.get(bucket).size();
-                if (histo.containsKey(bucket - 1)) {
-                    numEl += histo.get(bucket - 1).size();
-                }
-                if (histo.containsKey(bucket + 1)) {
-                    numEl += histo.get(bucket + 1).size();
-                }
                 if (!maximums.containsKey(numEl)) {
                     maximums.put(numEl, new LinkedList<Long>());
                 }
@@ -357,9 +372,7 @@ public class CoordinateSystem {
             }
 
             // now read two maximal values and copy the pairs into the final structure
-            double firstMin = 0; // the smallest distance from the origin to the small tick
-            double secondMin = 0;  // the smallest distance from the origin to the large tick
-            uniformByTick.put(dst, new LinkedList<Pair<ExtLine2D, Double>>());
+            uniformByTick.put(dst, new LinkedList<Tick>());
             Long maxBucketSize;
             try {
                 maxBucketSize = maximums.lastKey();
@@ -370,7 +383,6 @@ public class CoordinateSystem {
             if (maxBucketSize != null) {
                 List<Long> maxList = maximums.get(maxBucketSize);
                 Long maxBucket = maxList.get(0);
-                firstMin = maxBucket * unitLen;
                 uniformByTick.get(dst).addAll(histo.get(maxBucket));
                 if (histo.containsKey(maxBucket - 1)) {
                     uniformByTick.get(dst).addAll(histo.get(maxBucket - 1));
@@ -392,13 +404,12 @@ public class CoordinateSystem {
                         secondMaxSize = null;
                     }
 
-                    if (secondMaxSize != null){
+                    if (secondMaxSize != null) {
                         secondMaxBucket = maximums.get(secondMaxSize).get(0);
                     }
                 }
 
                 if (secondMaxBucket != null) {
-                    secondMin = secondMaxBucket * unitLen;
                     uniformByTick.get(dst).addAll(histo.get(secondMaxBucket));
                     if (histo.containsKey(secondMaxBucket - 1)) {
                         uniformByTick.get(dst).addAll(histo.get(secondMaxBucket - 1));
@@ -406,12 +417,8 @@ public class CoordinateSystem {
                     if (histo.containsKey(secondMaxBucket + 1)) {
                         uniformByTick.get(dst).addAll(histo.get(secondMaxBucket + 1));
                     }
-
-                    secondMin = minDistance.get(secondMaxBucket);
                 }
             }
-
-            uniformByTickLengths.put(dst, new ImmutablePair<Double, Double>(firstMin, secondMin));
         }
 
 
@@ -427,21 +434,14 @@ public class CoordinateSystem {
         }
         Pair<java.lang.Double, java.lang.Double> minDists;
 
-        minDists = uniformByTickLengths.get(maxTick);
-        if (minDists == null) {
-            System.out.println("ups - there is no minimals distance for this axis candidate");
-            minDists = new ImmutablePair<java.lang.Double, java.lang.Double>(0.0, 0.0);
-        }
-
 
         AxisTick res = new AxisTick();
         res.minorTick = maxTick;
-        res.ticks = new DoubleTreeMap<ExtLine2D>(CoordinateSystem.precission);
-        res.majorTick = minDists.getValue();
+        res.ticks = new DoubleTreeMap<Tick>(CoordinateSystem.precission);
 
         if (uniformByTick.get(maxTick) != null) {
-            for (Pair<ExtLine2D, Double> tick : uniformByTick.get(maxTick)) {
-                res.ticks.put(tick.getValue(), tick.getKey());
+            for (Tick tick : uniformByTick.get(maxTick)) {
+                res.ticks.put(tick.distanceFromTheOrigin, tick);
             }
         }
 

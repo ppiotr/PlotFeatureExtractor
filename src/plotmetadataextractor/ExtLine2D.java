@@ -6,6 +6,7 @@ package plotmetadataextractor;
 
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.text.DecimalFormat;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -262,6 +263,7 @@ public class ExtLine2D extends Line2D.Double {
      */
     @Override
     public String toString() {
-        return "ExtLine2D((" +  String.valueOf(this.getX1()) + "," + String.valueOf(this.getY1()) + ")-- ( " + String.valueOf(this.getX2())+","+ String.valueOf(this.getY2())+") hash=" + String.valueOf(this.hashCode()) + ")";
+        DecimalFormat df = new DecimalFormat("0.###");
+        return "ExtLine2D((" +  df.format(this.getX1()) + "," + df.format(this.getY1()) + ")-- ( " + df.format(this.getX2())+","+ df.format(this.getY2())+")";
     } 
 }
