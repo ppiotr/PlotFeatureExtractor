@@ -81,15 +81,30 @@ public class CoordinateSystem {
         public Tick(ExtLine2D line, ExtLine2D axis, Point2D.Double origin) {
             this.line = line;
             this.intersection = line.getIntersection(axis);
-            
+
             this.distanceFromTheOrigin = line.distance(origin);
             Pair<Double, Double> unitVector = axis.getUnitVector();
             this.distanceFromTheOrigin *= Math.signum(ExtLine2D.vecScalarProd(unitVector, ExtLine2D.getVector(origin, this.intersection)));
-            
+
             this.length = line.getP1().distance(line.getP2());
             this.isMajor = false;
         }
     }
+
+    /**
+     * This method embarks on a remarkable quest of matching ticks of axis
+     * candidates with possible labels, which might indicate numerical values
+     *
+     * @param plot
+     */
+    private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
+        for (Tick tick: coord.axesTicks.getKey().ticks.values()){
+            
+        }             
+    }
+    
+    
+    
 
     /**
      * Detects all the coordinate systems encoded in a graph
@@ -212,9 +227,9 @@ public class CoordinateSystem {
 
         public double minorTick;
         /**
-         * sometimes there are ticks which are longer, but still repeat regularly
-         * every N smaller ticks. These usually are marked with labels which we
-         * should detect
+         * sometimes there are ticks which are longer, but still repeat
+         * regularly every N smaller ticks. These usually are marked with labels
+         * which we should detect
          */
         public DoubleTreeMap<Tick> ticks;
     }
@@ -258,12 +273,12 @@ public class CoordinateSystem {
     private static TreeMap<Double, List<Tick>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
         TreeMap<Double, List<Tick>> intersections = new TreeMap<Double, List<Tick>>();
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
-            Point2D.Double tickInt = axis.getIntersection(intLine);            
-            Tick tick = new Tick(intLine, axis, origin);            
+            Point2D.Double tickInt = axis.getIntersection(intLine);
+            Tick tick = new Tick(intLine, axis, origin);
             if (Math.abs(tick.distanceFromTheOrigin - 0.01) > 0) {
                 if (!intersections.containsKey(Math.abs(tick.distanceFromTheOrigin))) {
                     intersections.put(Math.abs(tick.distanceFromTheOrigin), new LinkedList<Tick>());
-                }                
+                }
                 intersections.get(Math.abs(tick.distanceFromTheOrigin)).add(tick);
             }
         }
@@ -319,7 +334,7 @@ public class CoordinateSystem {
             long bucketNum = Math.round(tick.length / unitLen);
 
             Double dist = Math.abs(tick.distanceFromTheOrigin);
-            
+
             if (!histo.containsKey(bucketNum)) {
                 histo.put(bucketNum, new LinkedList<Tick>());
             }
@@ -410,17 +425,28 @@ public class CoordinateSystem {
                 }
 
                 if (secondMaxBucket != null) {
-                    uniformByTick.get(dst).addAll(histo.get(secondMaxBucket));
-                    if (histo.containsKey(secondMaxBucket - 1)) {
-                        uniformByTick.get(dst).addAll(histo.get(secondMaxBucket - 1));
+                    for (Tick tick : histo.get(secondMaxBucket)) {
+                        tick.isMajor = true;
+                        uniformByTick.get(dst).add(tick);
+
                     }
+
+                    if (histo.containsKey(secondMaxBucket - 1)) {
+                        for (Tick tick : histo.get(secondMaxBucket - 1)) {
+                            tick.isMajor = true;
+                            uniformByTick.get(dst).add(tick);
+                        }
+                    }
+
                     if (histo.containsKey(secondMaxBucket + 1)) {
-                        uniformByTick.get(dst).addAll(histo.get(secondMaxBucket + 1));
+                        for (Tick tick : histo.get(secondMaxBucket + 1)) {
+                            tick.isMajor = true;
+                            uniformByTick.get(dst).add(tick);
+                        }
                     }
                 }
             }
         }
-
 
         // now select the distance having the most ticks
         long maxNum = 0;
@@ -444,8 +470,6 @@ public class CoordinateSystem {
                 res.ticks.put(tick.distanceFromTheOrigin, tick);
             }
         }
-
-
         /**
          * We haven't taken into account any type of requirement that the basic
          * tick distance should be covered with an orthogonal line ... this

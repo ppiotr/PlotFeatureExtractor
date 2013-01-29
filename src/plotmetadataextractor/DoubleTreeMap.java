@@ -39,7 +39,7 @@ public class DoubleTreeMap<T> extends TreeMap<Double, T> {
 
     public DoubleTreeMap(double precission, SortedMap<Double, ? extends T> m) {
         super(m);
-        this.precission = precission;
+        this.precission = precission;        
     }
 
     /**

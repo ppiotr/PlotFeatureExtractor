@@ -90,8 +90,6 @@ public class ExtLine2DTest {
         line9 = new ExtLine2D(534, 40, 542, 40);
         int5 = line8.getIntersection(line9);
         assertEquals(int5.getY(), 40, 0.001);
-
-
     }
 
     @Test
@@ -174,6 +172,16 @@ public class ExtLine2DTest {
         ExtLine2D line1 = new ExtLine2D(0, 10, 10, 10);
         ExtLine2D line2 = new ExtLine2D(0, 0, 0, 10);
         Point2D.Double inter = line1.getIntersection(line2);
-        System.out.println("Hello test");
+        //TODO: Write assertions
+    }
+
+    @Test
+    public void testDistanceSegment() {
+        ExtLine2D l = new ExtLine2D(0, 0, 2, 0);
+        assertEquals(l.distanceSegment(new Point2D.Double(0, 0)), 0.0, 0.001);
+        assertEquals(l.distanceSegment(new Point2D.Double(0.5, 0)), 0.0, 0.001);
+        assertEquals(l.distanceSegment(new Point2D.Double(1, 0)), 0.0, 0.001);
+        assertEquals(l.distanceSegment(new Point2D.Double(-1, 0)), 1.0, 0.001);
+        assertEquals(l.distanceSegment(new Point2D.Double(3, 0)), 1.0, 0.001);
     }
 }

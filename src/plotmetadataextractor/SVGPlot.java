@@ -8,17 +8,17 @@ import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
-import java.awt.Stroke;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.batik.bridge.BridgeContext;
@@ -28,6 +28,7 @@ import org.apache.batik.dom.svg.SAXSVGDocumentFactory;
 import org.apache.batik.gvt.CompositeGraphicsNode;
 import org.apache.batik.gvt.GraphicsNode;
 import org.apache.batik.gvt.ShapeNode;
+import org.apache.batik.gvt.TextNode;
 import org.apache.batik.util.XMLResourceDescriptor;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -44,10 +45,12 @@ public class SVGPlot {
     public List<Point2D> points;
     public List<ExtLine2D> lineSegments;
     public HashMap<ExtLine2D, List<ExtLine2D>> orthogonalIntervals;
+    public HashMap<Shape, String> textElements;
 
     public SVGPlot() {
         this.lineSegments = new LinkedList<ExtLine2D>();
         this.points = new LinkedList<Point2D>();
+        this.textElements = new HashMap<Shape, String>();
     }
 
     public SVGPlot(String fName) {
@@ -151,7 +154,7 @@ public class SVGPlot {
                 if (!used.contains(winner)) {
                     used.add(winner);
                     dout.graphics.setColor(Color.BLUE);
-                    
+
                     for (ExtLine2D inter : intersecting.get(winner)) {
                         dout.graphics.draw(inter.getBounds());
                     }
@@ -204,7 +207,11 @@ public class SVGPlot {
                     this.includeShape(((ShapeNode) curNode).getShape(), curTransform);
                     // we are in a specialised node - we have to directly extract the 
                 } else {
-                    System.out.println("Encountered Unknown type of a node !!");
+                    if (curNode instanceof TextNode) {
+                        this.includeTextNode((TextNode) curNode, curTransform);
+                    } else {
+                        System.out.println("Encountered Unknown type of a node !!");
+                    }
                 }
             }
         }
@@ -291,6 +298,24 @@ public class SVGPlot {
         }
 
         return new ExtLine2D(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+    }
+
+    private void includeTextNode(TextNode tn, AffineTransform curTransform) {
+        Rectangle2D bounds = tn.getBounds();
+        String text = tn.getText();
+        Shape effectiveBoundary = curTransform.createTransformedShape(bounds);
+        this.textElements.put(effectiveBoundary, text);
+    }
+
+    /**
+     * This method splits all strings consisting of more than one word into
+     * parts. It assumes that the font inside of a box has fixed character width
+     * ... and splits it proportionally to the substing length
+     *
+     * @return
+     */
+    public Map<Rectangle2D.Double, String> getSplittedText() {
+        return null;
     }
 
     public static class ApproximateLinesContainer {

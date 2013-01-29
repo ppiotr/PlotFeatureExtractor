@@ -80,27 +80,36 @@ public class ExtLine2D extends Line2D.Double {
      */
     public static Point2D.Double getIntersection(ExtLine2D l1, ExtLine2D l2) {
         Pair<java.lang.Double, java.lang.Double> uv1 = l1.getUnitVector();
+        Pair<java.lang.Double, java.lang.Double> uv2 = l2.getUnitVector(); // for the sake of testing if they are parallel
+
+        if (Math.signum(uv1.getKey()) != Math.signum(uv2.getKey()) || Math.signum(uv1.getValue()) != Math.signum(uv2.getValue())) {
+            uv2 = new ImmutablePair<java.lang.Double, java.lang.Double>(-uv2.getKey(), -uv2.getValue());
+        }
+
+        if (Math.abs(uv1.getKey() - uv2.getKey()) < 0.001 && Math.abs(uv1.getValue() - uv2.getValue()) < 0.001) {
+            // lines are parallel, but there still can be intersection if colinear
+            ExtLine2D l = new ExtLine2D(l1.getX1(), l1.getY1(), l2.getX2(), l2.getY2());
+            Pair<java.lang.Double, java.lang.Double> uv = l.getUnitVector();
+
+            
+            // flip the direction of the unit vector ... if necessary
+            if (Math.signum(uv1.getKey()) != Math.signum(uv.getKey()) || Math.signum(uv1.getValue()) != Math.signum(uv.getValue())) {
+                uv = new ImmutablePair<java.lang.Double, java.lang.Double>(-uv.getKey(), -uv.getValue());
+            }
+            
+            
+            if (l.len() == 0 || (Math.abs(uv.getKey() - uv1.getKey()) < 0.001 && Math.abs(uv.getValue() - uv1.getValue()) < 0.001)) {
+                return (Point2D.Double) l1.getP1();
+            }
+            return null;
+        }
+
         double dist = l2.distance((Point2D.Double) l1.getP1());
-        return new Point2D.Double(l1.getP1().getX() + uv1.getKey() * dist, l1.getP1().getY() + uv1.getValue() * dist);
-//        
-//        LineParameters lp1 = ExtLine2D.getLineEquation(l1);
-//        LineParameters lp2 = ExtLine2D.getLineEquation(l2);
-//        double den = lp2.a * lp1.b - lp1.a * lp2.b;
-//
-//        if (den == 0) {
-//            // there are no answers - lines are parallel or colinear
-//            if (lp1.a == lp2.a && lp1.b == lp2.b && lp1.c == lp2.c) {
-//                // collinear ... determine if there exists a common point and return it
-//                return new Point2D.Double(l1.getX1(), l1.getY1());
-//            } else {
-//                return null;
-//            }
-//        }
-//
-//        double x = (lp1.c * lp2.b) - (lp2.c * lp1.b) / den;
-//        double y = (-lp2.c - lp2.a * x) / lp2.b;
-//
-//        return new Point2D.Double(x, y);
+        Point2D.Double c1 = new Point2D.Double(l1.getP1().getX() + uv1.getKey() * dist, l1.getP1().getY() + uv1.getValue() * dist);
+        if (Math.abs(l2.distance(c1)) <= 0.001) {
+            return c1;
+        }
+        return new Point2D.Double(l1.getP1().getX() - uv1.getKey() * dist, l1.getP1().getY() - uv1.getValue() * dist);
     }
 
     /**
@@ -210,7 +219,6 @@ public class ExtLine2D extends Line2D.Double {
      */
     public Pair<java.lang.Double, java.lang.Double> getUnitVector() {
         return new ImmutablePair<java.lang.Double, java.lang.Double>((this.getX2() - this.getX1()) / this.len(), (this.getY2() - this.getY1()) / this.len());
-
     }
 
     public static Pair<java.lang.Double, java.lang.Double> getVector(Point2D.Double p1, Point2D.Double p2) {
@@ -264,6 +272,45 @@ public class ExtLine2D extends Line2D.Double {
     @Override
     public String toString() {
         DecimalFormat df = new DecimalFormat("0.###");
-        return "ExtLine2D((" +  df.format(this.getX1()) + "," + df.format(this.getY1()) + ")-- ( " + df.format(this.getX2())+","+ df.format(this.getY2())+")";
-    } 
+        return "ExtLine2D((" + df.format(this.getX1()) + "," + df.format(this.getY1()) + ")-- ( " + df.format(this.getX2()) + "," + df.format(this.getY2()) + ")";
+    }
+
+    /**
+     * Distance from a point ... treating the ExtLine2D not as infinite line,
+     * but like a segment
+     *
+     * @param p
+     * @return
+     */
+    public double distanceSegment(Point2D.Double p) {
+        return ExtLine2D.distanceSegment(p, this);
+    }
+
+    /**
+     * Calculates a distance between a point and a line segment. The distance
+     * from a segment is different from the distance between line and point
+     * because if projection of the point one the line lies outside of the
+     * segment, the distance to the closes end is taken into account
+     */
+    public static double distanceSegment(Point2D.Double point, ExtLine2D segment) {
+        Pair<java.lang.Double, java.lang.Double> vn = segment.getUnitVector();
+        Pair<java.lang.Double, java.lang.Double> w = getVector(point, (Point2D.Double) segment.getP2());
+        Pair<java.lang.Double, java.lang.Double> ortho = vecSub(w, vecMul(vecScalarProd(w, vn), vn));
+        // point of the intersection with the line
+
+        Point2D.Double s = new Point2D.Double(point.getX() + ortho.getKey(), point.getY() + ortho.getValue());
+
+
+        double d1 = ((Point2D.Double) segment.getP1()).getX() - s.getX();
+        double d2 = ((Point2D.Double) segment.getP2()).getX() - s.getX();
+        double d3 = ((Point2D.Double) segment.getP1()).getY() - s.getY();
+        double d4 = ((Point2D.Double) segment.getP2()).getY() - s.getY();
+
+        if ((d1 != d2 && Math.signum(d2) == Math.signum(d1)) || (d3 != d4 && Math.signum(d3) == Math.signum(d4))) {
+            // they both lie on the same side of s ! .... we are outside of the segment
+            return Math.min(s.distance(segment.getP1()), s.distance(segment.getP2()));
+        } else {
+            return vecLen(ortho);
+        }
+    }
 }
