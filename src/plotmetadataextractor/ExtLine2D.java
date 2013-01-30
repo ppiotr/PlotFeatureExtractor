@@ -6,6 +6,7 @@ package plotmetadataextractor;
 
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.text.DecimalFormat;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -286,6 +287,15 @@ public class ExtLine2D extends Line2D.Double {
         return ExtLine2D.distanceSegment(p, this);
     }
 
+    
+    public static double distanceRectangle(Point2D.Double point, Rectangle2D.Double rectangle){
+        double res = ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMinX(), rectangle.getMinY(), rectangle.getMaxX(), rectangle.getMinY()));
+        res = Math.min(res, ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMaxX(), rectangle.getMinY(), rectangle.getMaxX(), rectangle.getMaxY())));
+        res = Math.min(res, ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMinX(), rectangle.getMaxY(), rectangle.getMaxX(), rectangle.getMaxY())));
+        res = Math.min(res, ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMinX(), rectangle.getMinY(), rectangle.getMinX(), rectangle.getMaxY())));
+        return res;
+    }
+    
     /**
      * Calculates a distance between a point and a line segment. The distance
      * from a segment is different from the distance between line and point

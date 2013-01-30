@@ -6,8 +6,10 @@ package plotmetadataextractor;
 
 import java.awt.Color;
 import java.awt.Rectangle;
+import java.awt.Shape;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -29,6 +31,7 @@ import org.apache.commons.lang3.tuple.Pair;
 public class CoordinateSystem {
 
     private static double precission = 4;
+    private static double descriptionDistance = 1.7; // the maximal distance of tick description from the tick... expressed as minimal tick
     Line2D axe1;
     Line2D axe2;
     DoubleTreeMap<Line2D> ticks1; // ticks on the 1st axis
@@ -69,6 +72,8 @@ public class CoordinateSystem {
         public double length;
         public double distanceFromTheOrigin;
         public boolean isMajor;
+        private Shape labelBoundary;
+        private String label;
 
         public Tick(ExtLine2D line, Point2D.Double intersect, double distance) {
             this.line = line;
@@ -76,6 +81,8 @@ public class CoordinateSystem {
             this.distanceFromTheOrigin = distance;
             this.length = line.getP1().distance(line.getP2());
             this.isMajor = false;
+            this.label = "";
+            this.labelBoundary = null;
         }
 
         public Tick(ExtLine2D line, ExtLine2D axis, Point2D.Double origin) {
@@ -98,13 +105,43 @@ public class CoordinateSystem {
      * @param plot
      */
     private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
-        for (Tick tick: coord.axesTicks.getKey().ticks.values()){
-            
-        }             
+        AxisTick key = coord.axesTicks.getKey();
+        double dist = key.minorTick * CoordinateSystem.descriptionDistance;
+        double minDist = Double.MAX_VALUE;
+        HashMap<Shape, Pair<Double, Tick>> mins = new HashMap<Shape, Pair<Double, Tick>>(); // boundary -> <minimal dist, tick>
+
+
+        for (Tick tick : coord.axesTicks.getKey().ticks.values()) {
+            String minString = "";
+            Shape closestSegment = null;
+            double minDst = Double.MAX_VALUE;
+            List<Pair<Shape, String>> nearby = plot.splitTextIndex.getByDistance(tick.intersection, minDist);
+            for (Pair<Shape, String> p : nearby) {
+                double dst = ExtLine2D.distanceRectangle(tick.intersection, (Rectangle2D.Double) p.getKey().getBounds2D());
+                if (minDist > dst) {
+                    closestSegment = p.getKey();
+                    minString = p.getValue();
+                }
+            }
+
+            Tick prevMin = null;
+            double prevDist = Double.MAX_VALUE;
+            if (mins.containsKey(closestSegment)) {
+                prevDist = mins.get(closestSegment).getKey();
+                prevMin = mins.get(closestSegment).getValue();
+            }
+
+            if (minDist < prevDist) {
+                if (prevMin != null){
+                    prevMin.label = "";
+                    prevMin.labelBoundary = null;                    
+                }
+                tick.label = minString;
+                tick.labelBoundary = closestSegment;
+                mins.put(closestSegment, new ImmutablePair<Double, Tick>(minDist, tick));
+            }
+        }
     }
-    
-    
-    
 
     /**
      * Detects all the coordinate systems encoded in a graph
@@ -203,14 +240,23 @@ public class CoordinateSystem {
             dgo.graphics.setColor(Color.blue);
             dgo.graphics.draw(par.axes.getValue());
             for (Tick tick : par.axesTicks.getValue().ticks.values()) {
-                dgo.graphics.draw(tick.line);
+                dgo.graphics.draw(tick.line);             
             }
+            
+            dgo.graphics.setColor(Color.PINK);
+            for (Shape sh: plot.splitTextElements.keySet()){
+                dgo.graphics.draw(sh);
+            }
+            
+            
             try {
                 dgo.flush(new File("/tmp/detected_" + String.valueOf(i) + ".png"));
             } catch (IOException ex) {
                 Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
             }
             CoordinateSystem.retrieveAxisTicks(plot, par.axes);
+            matchTicksWithCaptions(plot, par);
+            System.out.println("Matched ticks with labels");
         }
 
 

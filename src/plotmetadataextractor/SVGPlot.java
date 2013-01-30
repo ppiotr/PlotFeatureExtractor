@@ -6,7 +6,6 @@ package plotmetadataextractor;
 
 import java.awt.Color;
 import java.awt.Point;
-import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
@@ -41,16 +40,32 @@ import org.w3c.dom.NodeList;
  */
 public class SVGPlot {
 
-    public Rectangle boundary;
+    public Rectangle2D.Double boundary;
     public List<Point2D> points;
     public List<ExtLine2D> lineSegments;
     public HashMap<ExtLine2D, List<ExtLine2D>> orthogonalIntervals;
     public HashMap<Shape, String> textElements;
+    public HashMap<Shape, String> splitTextElements; /// text elements consisting of separate words
+    public SpatialArray<String> splitTextIndex; /// index used to search for text elements
+    public static long searchDivision = 100; // divide into 10000 tiles 
 
     public SVGPlot() {
         this.lineSegments = new LinkedList<ExtLine2D>();
         this.points = new LinkedList<Point2D>();
         this.textElements = new HashMap<Shape, String>();
+        this.splitTextElements = new HashMap<Shape, String>();
+        this.boundary = new Rectangle2D.Double(0, 0, 0, 0);
+    }
+
+    /**
+     * Calculates the spatial index of text elements, which we use to match axis
+     * ticks with text fragments
+     */
+    public void calculateTextIndex() {
+        this.splitTextIndex = new SpatialArray<String>(this.boundary, SVGPlot.searchDivision);
+        for (Shape s : this.splitTextElements.keySet()) {
+            this.splitTextIndex.put(s, this.splitTextElements.get(s));
+        }
     }
 
     public SVGPlot(String fName) {
@@ -74,6 +89,7 @@ public class SVGPlot {
             addGraphicsNode(i);
             this.removeDuplicateLines(0.01);
             this.calculateOrthogonalIntervals();
+            this.calculateTextIndex();
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
             // ...
@@ -208,7 +224,7 @@ public class SVGPlot {
                     // we are in a specialised node - we have to directly extract the 
                 } else {
                     if (curNode instanceof TextNode) {
-                        this.includeTextNode((TextNode) curNode, curTransform);
+                        this.addTextNode((TextNode) curNode, curTransform);
                     } else {
                         System.out.println("Encountered Unknown type of a node !!");
                     }
@@ -269,6 +285,7 @@ public class SVGPlot {
             shapeIt.next();
 
             this.points.add(curPoint);
+            Rectangle2D.Double.union(new Rectangle2D.Double(curPoint.getX(), curPoint.getY(), 0, 0), this.boundary, this.boundary);
             prevPoint = curPoint;
         }
     }
@@ -300,22 +317,72 @@ public class SVGPlot {
         return new ExtLine2D(p1.getX(), p1.getY(), p2.getX(), p2.getY());
     }
 
-    private void includeTextNode(TextNode tn, AffineTransform curTransform) {
+    /**
+     * Include a text portion with its geometrical boundary
+     */
+    public final void includeTextBlock(Shape bounds, String text) {
+        this.textElements.put(bounds, text);
+        // we also include split elements
+        List<Pair<Rectangle2D.Double, String>> split = SVGPlot.splitText(bounds, text);
+        for (Pair<Rectangle2D.Double, String> p : split) {
+            this.splitTextElements.put(p.getKey(), p.getValue());
+        }
+    }
+
+    public final void addTextNode(TextNode tn, AffineTransform curTransform) {
         Rectangle2D bounds = tn.getBounds();
         String text = tn.getText();
         Shape effectiveBoundary = curTransform.createTransformedShape(bounds);
-        this.textElements.put(effectiveBoundary, text);
+        this.includeTextBlock(effectiveBoundary, text);
     }
 
     /**
      * This method splits all strings consisting of more than one word into
      * parts. It assumes that the font inside of a box has fixed character width
-     * ... and splits it proportionally to the substing length
+     * ... and splits it proportionally to the substring length
      *
      * @return
      */
-    public Map<Rectangle2D.Double, String> getSplittedText() {
-        return null;
+    public Map<Rectangle2D.Double, String> getSplitText() {
+        // we assume rectangles and horizontal layout of the text ... a future improvement could include extension to arbitrary text layouts
+        HashMap<Rectangle2D.Double, String> results = new HashMap<Rectangle2D.Double, String>();
+
+        for (Shape shape : this.textElements.keySet()) {
+            String text = this.textElements.get(shape);
+            List<Pair<Rectangle2D.Double, String>> split = SVGPlot.splitText(shape, text);
+            for (Pair<Rectangle2D.Double, String> r : split) {
+                results.put(r.getKey(), r.getValue());
+            }
+        }
+        return results;
+    }
+
+    public static List<Pair<Rectangle2D.Double, String>> splitText(Shape shape, String text) {
+        List<Pair<Rectangle2D.Double, String>> res = new LinkedList<Pair<Rectangle2D.Double, String>>();
+        Rectangle2D bounds = shape.getBounds2D();
+
+        double charWidth = bounds.getWidth() / text.length();
+
+        int wordBeginning = 0;
+        for (int ind = 0; ind <= text.length(); ind++) {
+            if (ind == text.length() || Character.isSpaceChar(text.charAt(ind))) {
+                if (wordBeginning != ind) {
+                    // there really was a word
+                    String fragment = text.substring(wordBeginning, ind);
+                    res.add(
+                            new ImmutablePair<Rectangle2D.Double, String>(
+                            new Rectangle2D.Double(
+                            bounds.getMinX() + (wordBeginning * charWidth),
+                            bounds.getMinY(),
+                            (ind - wordBeginning) * charWidth,
+                            bounds.getHeight()),
+                            fragment));
+
+                }
+                wordBeginning = ind + 1;
+            }
+        }
+        return res;
     }
 
     public static class ApproximateLinesContainer {
