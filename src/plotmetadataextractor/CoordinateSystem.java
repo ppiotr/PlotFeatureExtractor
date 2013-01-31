@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -99,28 +100,23 @@ public class CoordinateSystem {
     }
 
     /**
-     * This method embarks on a remarkable quest of matching ticks of axis
-     * candidates with possible labels, which might indicate numerical values
-     *
-     * @param plot
+     * Matches ticks with captions ... for
      */
-    private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
-        AxisTick key = coord.axesTicks.getKey();
-        double dist = key.minorTick * CoordinateSystem.descriptionDistance;
-        double minDist = Double.MAX_VALUE;
+    private static void matchTicksWithCaptionsAxis(SVGPlot plot, AxisTick ticks) {      
+        double dist = ticks.minorTick * CoordinateSystem.descriptionDistance * 1000000;
         HashMap<Shape, Pair<Double, Tick>> mins = new HashMap<Shape, Pair<Double, Tick>>(); // boundary -> <minimal dist, tick>
-
-
-        for (Tick tick : coord.axesTicks.getKey().ticks.values()) {
+        
+        for (Tick tick : ticks.ticks.values()) {
             String minString = "";
             Shape closestSegment = null;
             double minDst = Double.MAX_VALUE;
-            List<Pair<Shape, String>> nearby = plot.splitTextIndex.getByDistance(tick.intersection, minDist);
-            for (Pair<Shape, String> p : nearby) {
-                double dst = ExtLine2D.distanceRectangle(tick.intersection, (Rectangle2D.Double) p.getKey().getBounds2D());
-                if (minDist > dst) {
-                    closestSegment = p.getKey();
-                    minString = p.getValue();
+            Map<Shape, String> nearby = plot.splitTextIndex.getByDistance(tick.intersection, dist);
+            for (Shape s : nearby.keySet()) {
+                double dst = ExtLine2D.distanceRectangle(tick.intersection, (Rectangle2D.Double) s.getBounds2D());
+                if (minDst > dst) {
+                    closestSegment = s;
+                    minString = nearby.get(s);
+                    minDst = dst;
                 }
             }
 
@@ -131,16 +127,27 @@ public class CoordinateSystem {
                 prevMin = mins.get(closestSegment).getValue();
             }
 
-            if (minDist < prevDist) {
-                if (prevMin != null){
+            if (minDst < prevDist) {
+                if (prevMin != null) {
                     prevMin.label = "";
-                    prevMin.labelBoundary = null;                    
+                    prevMin.labelBoundary = null;
                 }
                 tick.label = minString;
                 tick.labelBoundary = closestSegment;
-                mins.put(closestSegment, new ImmutablePair<Double, Tick>(minDist, tick));
+                mins.put(closestSegment, new ImmutablePair<Double, Tick>(minDst, tick));
             }
         }
+    }
+
+    /**
+     * This method embarks on a remarkable quest of matching ticks of axis
+     * candidates with possible labels, which might indicate numerical values
+     *
+     * @param plot
+     */
+    private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
+        matchTicksWithCaptionsAxis(plot, coord.axesTicks.getKey());
+        matchTicksWithCaptionsAxis(plot, coord.axesTicks.getValue());
     }
 
     /**
@@ -197,7 +204,8 @@ public class CoordinateSystem {
      * @return
      */
     private static boolean initialFilter(CoordCandidateParams params) {
-        return (params.axesTicks.getKey().ticks.size() > 4) && (params.lengthsRatio > 0.7) && (params.lengthsRatio < 1.3);
+        //return true;
+        return (params.lengthsRatio > 0.7) && (params.lengthsRatio < 1.3);
 
     }
 
@@ -227,35 +235,61 @@ public class CoordinateSystem {
 
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
         for (int i = 0; i < 500; i++) {
-            dgo.reset();
-            dgo.graphics.setColor(Color.red);
-
-            // drawing the first axis
             CoordCandidateParams par = (CoordCandidateParams) array[i];
+            matchTicksWithCaptions(plot, par);
+
+
+            dgo.reset();
+
+
+            dgo.graphics.setColor(Color.PINK);
+            for (Shape sh : plot.splitTextElements.keySet()) {
+                dgo.graphics.draw(sh);
+            }
+
+
+
+            dgo.graphics.setColor(Color.red);
+            // drawing the first axis
+
             dgo.graphics.draw(par.axes.getKey());
             for (Tick tick : par.axesTicks.getKey().ticks.values()) {
+                dgo.graphics.setColor(Color.red);
                 dgo.graphics.draw(tick.line);
+
+                if (tick.labelBoundary != null) {
+                    dgo.graphics.setColor(Color.BLACK);
+                    dgo.graphics.draw(tick.labelBoundary);
+                    Rectangle2D bounds = tick.labelBoundary.getBounds2D();
+                    int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
+                    int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
+                    dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
+                }
             }
 
             dgo.graphics.setColor(Color.blue);
             dgo.graphics.draw(par.axes.getValue());
+
             for (Tick tick : par.axesTicks.getValue().ticks.values()) {
-                dgo.graphics.draw(tick.line);             
+                dgo.graphics.setColor(Color.blue);
+                dgo.graphics.draw(tick.line);
+                 if (tick.labelBoundary != null) {
+                    dgo.graphics.setColor(Color.BLACK);
+                    dgo.graphics.draw(tick.labelBoundary);
+                    Rectangle2D bounds = tick.labelBoundary.getBounds2D();
+                    int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
+                    int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
+                    dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
+                }
+
             }
-            
-            dgo.graphics.setColor(Color.PINK);
-            for (Shape sh: plot.splitTextElements.keySet()){
-                dgo.graphics.draw(sh);
-            }
-            
-            
+
             try {
                 dgo.flush(new File("/tmp/detected_" + String.valueOf(i) + ".png"));
             } catch (IOException ex) {
                 Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
             }
             CoordinateSystem.retrieveAxisTicks(plot, par.axes);
-            matchTicksWithCaptions(plot, par);
             System.out.println("Matched ticks with labels");
         }
 
@@ -318,6 +352,9 @@ public class CoordinateSystem {
      */
     private static TreeMap<Double, List<Tick>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
         TreeMap<Double, List<Tick>> intersections = new TreeMap<Double, List<Tick>>();
+        if (!plot.orthogonalIntervals.containsKey(axis)){
+            return intersections;
+        }
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
             Point2D.Double tickInt = axis.getIntersection(intLine);
             Tick tick = new Tick(intLine, axis, origin);

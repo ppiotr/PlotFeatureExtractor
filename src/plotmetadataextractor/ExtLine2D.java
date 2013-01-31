@@ -289,6 +289,9 @@ public class ExtLine2D extends Line2D.Double {
 
     
     public static double distanceRectangle(Point2D.Double point, Rectangle2D.Double rectangle){
+        if (rectangle.contains(point)){
+            return 0.0;
+        }
         double res = ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMinX(), rectangle.getMinY(), rectangle.getMaxX(), rectangle.getMinY()));
         res = Math.min(res, ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMaxX(), rectangle.getMinY(), rectangle.getMaxX(), rectangle.getMaxY())));
         res = Math.min(res, ExtLine2D.distanceSegment(point, new ExtLine2D(rectangle.getMinX(), rectangle.getMaxY(), rectangle.getMaxX(), rectangle.getMaxY())));
@@ -318,7 +321,7 @@ public class ExtLine2D extends Line2D.Double {
 
         if ((d1 != d2 && Math.signum(d2) == Math.signum(d1)) || (d3 != d4 && Math.signum(d3) == Math.signum(d4))) {
             // they both lie on the same side of s ! .... we are outside of the segment
-            return Math.min(s.distance(segment.getP1()), s.distance(segment.getP2()));
+            return Math.min(point.distance(segment.getP1()), point.distance(segment.getP2()));
         } else {
             return vecLen(ortho);
         }

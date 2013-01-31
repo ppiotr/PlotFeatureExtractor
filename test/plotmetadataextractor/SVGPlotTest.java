@@ -48,6 +48,6 @@ public class SVGPlotTest {
         plot.includeTextBlock(new Rectangle2D.Double(5.5, 6.6, 11.34, 12.24), "Hello world");
         plot.includeTextBlock(new Rectangle2D.Double(90.5, 6.6, 11.34, 12.24), " Ala    ma       kota  ");
         Map<Double, String> splittedText = plot.getSplitText();        
-        assertEquals(5, splittedText.size());        
+        assertEquals(5, splittedText.size());              
     }
 }

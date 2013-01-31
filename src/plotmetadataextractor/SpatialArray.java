@@ -10,6 +10,7 @@ import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -59,18 +60,18 @@ public class SpatialArray<T> {
         return x * this.divisionLevel + y;
     }
 
-    public List<Pair<Shape, T>> getByDistance(Point2D.Double point, double maxDistance) {
-        LinkedList<Pair<Shape, T>> results = new LinkedList<Pair<Shape, T>>();
-        long maxDistanceV = Math.round(Math.floor(maxDistance / this.heightUnit));
-        long maxDistanceH = Math.round(Math.floor(maxDistance / this.widthUnit));
+    public Map<Shape, T> getByDistance(Point2D.Double point, double maxDistance) {
+        HashMap<Shape, T> results = new HashMap<Shape, T>();
+        long maxDistanceV = Math.round(Math.ceil(maxDistance / this.heightUnit));
+        long maxDistanceH = Math.round(Math.ceil(maxDistance / this.widthUnit));
 
         long x = Math.round(Math.floor(point.getX() / this.widthUnit));
         long y = Math.round(Math.floor(point.getY() / this.heightUnit));
 
         long minX = Math.max(x - maxDistanceH, 0);
         long minY = Math.max(y - maxDistanceV, 0);
-        long maxX = Math.max(x + maxDistanceH, this.divisionLevel - 1);
-        long maxY = Math.max(y + maxDistanceV, this.divisionLevel - 1);
+        long maxX = Math.min(x + maxDistanceH, this.divisionLevel - 1);
+        long maxY = Math.min(y + maxDistanceV, this.divisionLevel - 1);
 
         for (long cx = minX; cx <= maxX; cx++) {
             for (long cy = minY; cy <= maxY; cy++) {
@@ -79,7 +80,7 @@ public class SpatialArray<T> {
                     for (Pair<Shape, T> a : this.tiles.get(index)) {
                         Rectangle2D.Double bounds = (Rectangle2D.Double) a.getKey().getBounds2D();
                         if (ExtLine2D.distanceRectangle(point, bounds) < maxDistance) {
-                            results.add(a);
+                            results.put(a.getKey() ,a.getValue());
                         }
                     }
                 }

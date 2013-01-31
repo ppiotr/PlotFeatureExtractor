@@ -150,37 +150,37 @@ public class SVGPlot {
         try {
             DebugGraphicalOutput dout = DebugGraphicalOutput.getInstance();
             dout.flush(new File("/tmp/out2.png"));
-
-            int i = 0;
-            HashSet<ExtLine2D> used = new HashSet<ExtLine2D>();
-
-            for (ExtLine2D line : intersecting.keySet()) {
-                dout.reset();
-                //we search for the longest intersecting and draw intersecting with this one
-
-                ExtLine2D winner = line;
-
-                for (ExtLine2D inter : intersecting.get(line)) {
-                    if (inter.len() > winner.len()) {
-                        winner = inter;
-                    }
-                }
-
-                // now drawing the winner
-                if (!used.contains(winner)) {
-                    used.add(winner);
-                    dout.graphics.setColor(Color.BLUE);
-
-                    for (ExtLine2D inter : intersecting.get(winner)) {
-                        dout.graphics.draw(inter.getBounds());
-                    }
-
-                    dout.graphics.setColor(Color.RED);
-                    dout.graphics.draw(winner);
-                    dout.flush(new File("/tmp/ortho_" + String.valueOf(i) + ".png"));
-                    i++;
-                }
-            }
+//
+//            int i = 0;
+//            HashSet<ExtLine2D> used = new HashSet<ExtLine2D>();
+//
+//            for (ExtLine2D line : intersecting.keySet()) {
+//                dout.reset();
+//                //we search for the longest intersecting and draw intersecting with this one
+//
+//                ExtLine2D winner = line;
+//
+//                for (ExtLine2D inter : intersecting.get(line)) {
+//                    if (inter.len() > winner.len()) {
+//                        winner = inter;
+//                    }
+//                }
+//
+//                // now drawing the winner
+//                if (!used.contains(winner)) {
+//                    used.add(winner);
+//                    dout.graphics.setColor(Color.BLUE);
+//                    
+//                    for (ExtLine2D inter : intersecting.get(winner)) {
+//                        dout.graphics.draw(inter.getBounds());
+//                    }
+//
+//                    dout.graphics.setColor(Color.RED);
+//                    dout.graphics.draw(winner);
+//                    dout.flush(new File("/tmp/ortho_" + String.valueOf(i) + ".png"));
+//                    i++;
+//                }
+//            }
         } catch (IOException ex) {
             Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
         }

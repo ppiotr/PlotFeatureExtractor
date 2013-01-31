@@ -5,13 +5,13 @@ package plotmetadataextractor;
  * and open the template in the editor.
  */
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import org.junit.After;
 import org.junit.AfterClass;
+import static org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import static org.junit.Assert.*;
-import plotmetadataextractor.ExtLine2D;
 
 /**
  *
@@ -182,6 +182,18 @@ public class ExtLine2DTest {
         assertEquals(l.distanceSegment(new Point2D.Double(0.5, 0)), 0.0, 0.001);
         assertEquals(l.distanceSegment(new Point2D.Double(1, 0)), 0.0, 0.001);
         assertEquals(l.distanceSegment(new Point2D.Double(-1, 0)), 1.0, 0.001);
-        assertEquals(l.distanceSegment(new Point2D.Double(3, 0)), 1.0, 0.001);
+        assertEquals(l.distanceSegment(new Point2D.Double(3, 0)), 1.0, 0.001);                      
     }
+    
+    @Test
+    public void testDistanceRectangle(){
+        Rectangle2D.Double rec = new Rectangle2D.Double(130.05, 464.999999, 17.38, 10.999999);
+        double d1 = ExtLine2D.distanceRectangle(new Point2D.Double(147.962, 470.8), rec);
+        double d2 = ExtLine2D.distanceRectangle(new Point2D.Double(147.962, 462.64), rec);
+        
+        assertTrue(true);
+    }
+    
+    
+    
 }
