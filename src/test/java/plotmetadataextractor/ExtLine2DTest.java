@@ -6,44 +6,28 @@ package plotmetadataextractor;
  */
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import org.junit.After;
-import org.junit.AfterClass;
-import static org.junit.Assert.*;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import junit.framework.TestCase;
 
 /**
  *
  * @author piotr
  */
-public class ExtLine2DTest {
+public class ExtLine2DTest extends TestCase{
 
     public ExtLine2DTest() {
+        super();
     }
 
-    @BeforeClass
-    public static void setUpClass() {
+    @Override
+    public void setUp() throws Exception{
+        super.setUp();
     }
 
-    @AfterClass
-    public static void tearDownClass() {
+    @Override
+    public void tearDown() throws Exception{
+        super.tearDown();
     }
-
-    @Before
-    public void setUp() {
-    }
-
-    @After
-    public void tearDown() {
-    }
-    // TODO add test methods here.
-    // The methods must be annotated with annotation @Test. For example:
-    //
-    // @Test
-    // public void hello() {}
-
-    @Test
+    
     public void testIntersections() {
         ExtLine2D line1 = new ExtLine2D(0, 0, 1, 1);
         ExtLine2D line2 = new ExtLine2D(0, 0, 1, -1);
@@ -92,7 +76,6 @@ public class ExtLine2DTest {
         assertEquals(int5.getY(), 40, 0.001);
     }
 
-    @Test
     public void testAngles() {
         ExtLine2D line = new ExtLine2D(0, 0, 1, 1);
         double angle = line.getAngle();
@@ -133,7 +116,6 @@ public class ExtLine2DTest {
 
     }
 
-    @Test
     public void testLineDistances() {
         ExtLine2D line = new ExtLine2D(0, 0, 1, -1);
         double dst = line.distance(new Point2D.Double(0, 0));
@@ -167,7 +149,6 @@ public class ExtLine2DTest {
 
     }
 
-    @Test
     public void testGetIntersection() {
         ExtLine2D line1 = new ExtLine2D(0, 10, 10, 10);
         ExtLine2D line2 = new ExtLine2D(0, 0, 0, 10);
@@ -175,7 +156,6 @@ public class ExtLine2DTest {
         //TODO: Write assertions
     }
 
-    @Test
     public void testDistanceSegment() {
         ExtLine2D l = new ExtLine2D(0, 0, 2, 0);
         assertEquals(l.distanceSegment(new Point2D.Double(0, 0)), 0.0, 0.001);
@@ -185,7 +165,6 @@ public class ExtLine2DTest {
         assertEquals(l.distanceSegment(new Point2D.Double(3, 0)), 1.0, 0.001);                      
     }
     
-    @Test
     public void testDistanceRectangle(){
         Rectangle2D.Double rec = new Rectangle2D.Double(130.05, 464.999999, 17.38, 10.999999);
         double d1 = ExtLine2D.distanceRectangle(new Point2D.Double(147.962, 470.8), rec);

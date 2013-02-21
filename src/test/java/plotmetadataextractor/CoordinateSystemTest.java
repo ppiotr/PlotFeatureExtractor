@@ -6,38 +6,28 @@ package plotmetadataextractor;
 
 import java.awt.geom.Point2D;
 import java.util.List;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import junit.framework.TestCase;
 
 /**
  *
  * @author piotr
  */
-public class CoordinateSystemTest {
+public class CoordinateSystemTest extends TestCase {
 
     public CoordinateSystemTest() {
+        super();
     }
 
-    @BeforeClass
-    public static void setUpClass() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
     }
 
-    @AfterClass
-    public static void tearDownClass() {
+    @Override
+    public void tearDown() throws Exception {
+        super.tearDown();
     }
 
-    @Before
-    public void setUp() {
-    }
-
-    @After
-    public void tearDown() {
-    }
-
-    @Test
     public void testAxisExtraction() {
         SVGPlot plot;
         List<CoordinateSystem> extractCoordinateSystems;
@@ -50,14 +40,13 @@ public class CoordinateSystemTest {
 //        plot = getSamplePlot1();
 //        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
 //
-        
+
         plot = getSamplePlot2();
         extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
 
         plot = getSamplePlot3();
         extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
-
-        System.out.println("Hello test");
+        
     }
 
     /**

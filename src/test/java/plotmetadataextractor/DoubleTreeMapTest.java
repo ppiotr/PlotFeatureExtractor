@@ -4,42 +4,31 @@
  */
 package plotmetadataextractor;
 
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import static org.junit.Assert.*;
+import junit.framework.TestCase;
 
 /**
  *
  * @author piotr
  */
-public class DoubleTreeMapTest {
+public class DoubleTreeMapTest extends TestCase {
 
     public DoubleTreeMapTest() {
     }
 
-    @BeforeClass
-    public static void setUpClass() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+
     }
 
-    @AfterClass
-    public static void tearDownClass() {
-    }
-
-    @Before
-    public void setUp() {
-    }
-
-    @After
-    public void tearDown() {
+    @Override
+    public void tearDown() throws Exception {
+        super.tearDown();
     }
 
     /**
      * We test on a map which should be exact ...
      */
-    @Test
     public void testExactRetrieval() {
         DoubleTreeMap<Integer> tm = new DoubleTreeMap<Integer>(0);
         tm.put(10.56, 5);
@@ -109,7 +98,7 @@ public class DoubleTreeMapTest {
         assertEquals((int) tm.get(5.51), 11);
         assertEquals((int) tm.get(5.5055), 11);
         assertEquals((int) tm.get(5.505), 543);
-        
+
 
 
     }

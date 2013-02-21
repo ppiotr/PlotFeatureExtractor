@@ -4,7 +4,6 @@
  */
 package plotmetadataextractor;
 
-import java.awt.Color;
 import java.awt.Point;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
@@ -12,9 +11,10 @@ import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +61,7 @@ public class SVGPlot {
      * Calculates the spatial index of text elements, which we use to match axis
      * ticks with text fragments
      */
-    public void calculateTextIndex() {
+    public final void calculateTextIndex() {
         this.splitTextIndex = new SpatialArray<String>(this.boundary, SVGPlot.searchDivision);
         for (Shape s : this.splitTextElements.keySet()) {
             this.splitTextIndex.put(s, this.splitTextElements.get(s));
@@ -73,9 +73,10 @@ public class SVGPlot {
         try {
             String parser = XMLResourceDescriptor.getXMLParserClassName();
             SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
-            String uri = "file://" + fName;
-            Document doc = f.createDocument(uri);
-
+            String uri = "file://" +fName;
+            InputStream is = new FileInputStream(new File(fName));
+            Document doc = f.createDocument(uri, is);
+            
             NodeList e1 = doc.getElementsByTagName("path");
             NodeList e2 = doc.getElementsByTagName("line");
 
@@ -96,7 +97,7 @@ public class SVGPlot {
         }
     }
 
-    public void calculateOrthogonalIntervals() {
+    public final void calculateOrthogonalIntervals() {
         System.out.println("Processing line intervals");
         HashMap<Integer, List<ExtLine2D>> linesByAngle = new HashMap<Integer, List<ExtLine2D>>();
         HashMap<ExtLine2D, List<ExtLine2D>> intersecting = new HashMap<ExtLine2D, List<ExtLine2D>>();
@@ -441,7 +442,7 @@ public class SVGPlot {
      *
      * @param precission
      */
-    public void removeDuplicateLines(double precission) {
+    public final void removeDuplicateLines(double precission) {
         List<ExtLine2D> result = new LinkedList<ExtLine2D>();
         int numRemoved = 0;
         // we will be indexing with a given precission using coordinates of the beginning and the end

@@ -102,10 +102,10 @@ public class CoordinateSystem {
     /**
      * Matches ticks with captions ... for
      */
-    private static void matchTicksWithCaptionsAxis(SVGPlot plot, AxisTick ticks) {      
-        double dist = ticks.minorTick * CoordinateSystem.descriptionDistance * 1000000;
+    private static void matchTicksWithCaptionsAxis(SVGPlot plot, AxisTick ticks) {
+        double dist = ticks.minorTick * CoordinateSystem.descriptionDistance;
         HashMap<Shape, Pair<Double, Tick>> mins = new HashMap<Shape, Pair<Double, Tick>>(); // boundary -> <minimal dist, tick>
-        
+
         for (Tick tick : ticks.ticks.values()) {
             String minString = "";
             Shape closestSegment = null;
@@ -137,6 +137,13 @@ public class CoordinateSystem {
                 mins.put(closestSegment, new ImmutablePair<Double, Tick>(minDst, tick));
             }
         }
+
+
+
+        /**
+         * After the initial matching we make an attempt to rematch -> giving
+         * more priority to the major ticks
+         */
     }
 
     /**
@@ -188,9 +195,9 @@ public class CoordinateSystem {
 
         /// now we need to transform the selected axes into coordinate systems
 
-        for (CoordCandidateParams params : coordinateSystems) {
-            result.add(params.toCoordinateSystem());
-        }
+//        for (CoordCandidateParams params : coordinateSystems) {
+//            result.add(params.toCoordinateSystem());
+//        }
 
         return result;
 
@@ -234,7 +241,7 @@ public class CoordinateSystem {
         // let's draw best 10 !
 
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < Math.min(500, array.length); i++) {
             CoordCandidateParams par = (CoordCandidateParams) array[i];
             matchTicksWithCaptions(plot, par);
 
@@ -273,7 +280,7 @@ public class CoordinateSystem {
             for (Tick tick : par.axesTicks.getValue().ticks.values()) {
                 dgo.graphics.setColor(Color.blue);
                 dgo.graphics.draw(tick.line);
-                 if (tick.labelBoundary != null) {
+                if (tick.labelBoundary != null) {
                     dgo.graphics.setColor(Color.BLACK);
                     dgo.graphics.draw(tick.labelBoundary);
                     Rectangle2D bounds = tick.labelBoundary.getBounds2D();
@@ -296,8 +303,8 @@ public class CoordinateSystem {
 
         //let's sort by the number of detected ticks
 
-        throw new UnsupportedOperationException("Not yet implemented");
-
+        //throw new UnsupportedOperationException("Not yet implemented");
+        return null;
     }
 
     /**
@@ -352,7 +359,7 @@ public class CoordinateSystem {
      */
     private static TreeMap<Double, List<Tick>> ticksCalculateOriginDist(ExtLine2D axis, SVGPlot plot, Point2D.Double origin) {
         TreeMap<Double, List<Tick>> intersections = new TreeMap<Double, List<Tick>>();
-        if (!plot.orthogonalIntervals.containsKey(axis)){
+        if (!plot.orthogonalIntervals.containsKey(axis)) {
             return intersections;
         }
         for (ExtLine2D intLine : plot.orthogonalIntervals.get(axis)) {
