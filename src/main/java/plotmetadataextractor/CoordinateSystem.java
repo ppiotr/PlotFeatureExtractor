@@ -4,6 +4,10 @@
  */
 package plotmetadataextractor;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.sun.xml.internal.ws.api.ha.HaInfo;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -13,12 +17,16 @@ import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -66,6 +74,26 @@ public class CoordinateSystem {
         }
     }
 
+    public static class TickLabel {
+
+        /**
+         * A representation of a label assigned to a tick
+         */
+        String text;
+        Shape boundary;
+
+        /**
+         * Creates a new label consisting of a boundary and the describing text
+         *
+         * @param b
+         * @param t
+         */
+        public TickLabel(Shape b, String t) {
+            this.text = t;
+            this.boundary = b;
+        }
+    }
+
     public static class Tick {
 
         public ExtLine2D line;
@@ -73,8 +101,7 @@ public class CoordinateSystem {
         public double length;
         public double distanceFromTheOrigin;
         public boolean isMajor;
-        private Shape labelBoundary;
-        private String label;
+        private TickLabel label;
 
         public Tick(ExtLine2D line, Point2D.Double intersect, double distance) {
             this.line = line;
@@ -82,8 +109,7 @@ public class CoordinateSystem {
             this.distanceFromTheOrigin = distance;
             this.length = line.getP1().distance(line.getP2());
             this.isMajor = false;
-            this.label = "";
-            this.labelBoundary = null;
+            this.label = null;
         }
 
         public Tick(ExtLine2D line, ExtLine2D axis, Point2D.Double origin) {
@@ -103,6 +129,7 @@ public class CoordinateSystem {
      * Matches ticks with captions ... for
      */
     private static void matchTicksWithCaptionsAxis(SVGPlot plot, AxisTick ticks) {
+        double majorTolerance = 4; // how much father can the label be from a major tick to match it instead of a minor tick
         double dist = ticks.minorTick * CoordinateSystem.descriptionDistance;
         HashMap<Shape, Pair<Double, Tick>> mins = new HashMap<Shape, Pair<Double, Tick>>(); // boundary -> <minimal dist, tick>
 
@@ -113,6 +140,10 @@ public class CoordinateSystem {
             Map<Shape, String> nearby = plot.splitTextIndex.getByDistance(tick.intersection, dist);
             for (Shape s : nearby.keySet()) {
                 double dst = ExtLine2D.distanceRectangle(tick.intersection, (Rectangle2D.Double) s.getBounds2D());
+                if (!tick.isMajor) {
+                    dst *= majorTolerance;
+                    dst += Double.MIN_VALUE;
+                }
                 if (minDst > dst) {
                     closestSegment = s;
                     minString = nearby.get(s);
@@ -129,21 +160,95 @@ public class CoordinateSystem {
 
             if (minDst < prevDist) {
                 if (prevMin != null) {
-                    prevMin.label = "";
-                    prevMin.labelBoundary = null;
+                    prevMin.label = null;
                 }
-                tick.label = minString;
-                tick.labelBoundary = closestSegment;
+                tick.label = new TickLabel(closestSegment, minString);
+
                 mins.put(closestSegment, new ImmutablePair<Double, Tick>(minDst, tick));
+            }
+        }
+        /**
+         * After the initial matching we make an attempt to rematch -> giving
+         * more priority to the major ticks. First we check if the number of
+         * major ticks is comparable to the number of assigned labels... if so,
+         * we should
+         */
+        int numAssigned = Iterables.size(Iterables.filter(ticks.ticks.values(), new Predicate<Tick>() {
+            @Override
+            public boolean apply(Tick t) {
+                return t.label != null;
+            }
+        }));
+
+        int numMajor = Iterables.size(Iterables.filter(ticks.ticks.values(), new Predicate<Tick>() {
+            @Override
+            public boolean apply(Tick t) {
+                return t.isMajor;
+            }
+        }));
+
+        if (numAssigned == 0) {
+            return;
+        }
+
+        double coeff = (double) numMajor / (double) numAssigned;
+        double assignmentTolerance = 1.5;
+
+        if (coeff > 1 / assignmentTolerance && coeff < assignmentTolerance) {
+            // we should probably assign labels only to the major ticks ... 1st we detach all the labels.
+            HashMap<TickLabel, PriorityQueue<Tick>> minTicks = new HashMap<TickLabel, PriorityQueue<Tick>>(); // the mapping label -> ordered by distance list of ticks
+
+            Iterable<Tick> majors = Iterables.filter(ticks.ticks.values(), new Predicate<Tick>() {
+                @Override
+                public boolean apply(Tick t) {
+                    return t.isMajor;
+                }
+            });
+
+            for (Tick t : ticks.ticks.values()) {
+                if (t.label != null) {
+                    PriorityQueue<Tick> labelQueue = new PriorityQueue<Tick>(numMajor, new TicksComparator(t.label.boundary.getBounds2D()));
+                    minTicks.put(t.label, labelQueue);
+                    for (Tick major : majors) {
+                        labelQueue.add(major);
+                    }
+                    t.label = null;
+                }
+            }
+
+            // now we create a global priority queue
+            HashSet<Tick> used = new HashSet<Tick>();
+            PriorityQueue<TickLabel> matchingQueue = new PriorityQueue<TickLabel>(minTicks.size(), new TickLabelsComparator(minTicks));
+            for (TickLabel label: minTicks.keySet()){
+                matchingQueue.add(label);
+            }
+            
+            // now we reassign to only major ticks                        
+            
+            while (!matchingQueue.isEmpty()){
+                TickLabel closestLabel = matchingQueue.poll();
+                Tick closestTick = minTicks.get(closestLabel).peek();
+                if (used.contains(closestTick)){
+                    /// remove all used ticks from the beginning of the queue
+                    PriorityQueue<Tick> q = minTicks.get(closestLabel);
+                    while (used.contains(q.peek())){
+                        q.remove();
+                    }
+                    if (q.isEmpty()){
+                        return; /// all ticks have been used... no further matching is possible
+                    }
+                    matchingQueue.add(closestLabel);
+                } else {
+                    // we have a new assignment ! 
+                    closestTick.label = closestLabel;
+                    used.add(closestTick);
+                }
+                
             }
         }
 
 
 
-        /**
-         * After the initial matching we make an attempt to rematch -> giving
-         * more priority to the major ticks
-         */
     }
 
     /**
@@ -155,6 +260,63 @@ public class CoordinateSystem {
     private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
         matchTicksWithCaptionsAxis(plot, coord.axesTicks.getKey());
         matchTicksWithCaptionsAxis(plot, coord.axesTicks.getValue());
+    }
+
+    public static class TickLabelsComparator implements Comparator<TickLabel> {
+
+        private final HashMap<TickLabel, PriorityQueue<Tick>> kb;
+
+        /**
+         * Creates a comparator for labels based on which one has the closest
+         * tick ATTENTION: Only some modifications to kb will be safe if we use
+         * this comparator in a PriorityQueue or some structure of a similar
+         * type
+         *
+         * @param o The reference point for comparison
+         */
+        public TickLabelsComparator(HashMap<TickLabel, PriorityQueue<Tick>> kb) {
+            this.kb = kb;
+
+        }
+
+        @Override
+        public int compare(TickLabel o1, TickLabel o2) {
+
+            Tick t1 = this.kb.get(o1).peek();
+            Tick t2 = this.kb.get(o1).peek();
+            if (t1 == null) {
+                return -1;
+            }
+            if (t2 == null) {
+                return 1;
+            }
+            double d1 = ExtLine2D.distanceRectangle(t1.intersection, (Rectangle2D.Double) o1.boundary.getBounds2D());
+            double d2 = ExtLine2D.distanceRectangle(t2.intersection, (Rectangle2D.Double) o2.boundary.getBounds2D());
+
+            return d1 == d2 ? 0 : d1 > d2 ? 1 : -1;
+        }
+    }
+
+    public static class TicksComparator implements Comparator<Tick> {
+
+        private final Rectangle2D boundary;
+
+        /**
+         * Creates a comparator for ticks based on the distance to a given
+         * rectangle
+         *
+         * @param o The reference point for comparison
+         */
+        public TicksComparator(Rectangle2D o) {
+            this.boundary = o;
+        }
+
+        @Override
+        public int compare(Tick o1, Tick o2) {
+            double d1 = ExtLine2D.distanceRectangle(o1.intersection, (Rectangle2D.Double) this.boundary);
+            double d2 = ExtLine2D.distanceRectangle(o2.intersection, (Rectangle2D.Double) this.boundary);
+            return d1 == d2 ? 0 : d1 > d2 ? 1 : -1;
+        }
     }
 
     /**
@@ -264,10 +426,10 @@ public class CoordinateSystem {
                 dgo.graphics.setColor(Color.red);
                 dgo.graphics.draw(tick.line);
 
-                if (tick.labelBoundary != null) {
+                if (tick.label != null) {
                     dgo.graphics.setColor(Color.BLACK);
-                    dgo.graphics.draw(tick.labelBoundary);
-                    Rectangle2D bounds = tick.labelBoundary.getBounds2D();
+                    dgo.graphics.draw(tick.label.boundary);
+                    Rectangle2D bounds = tick.label.boundary.getBounds2D();
                     int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
                     int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
                     dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
@@ -280,10 +442,10 @@ public class CoordinateSystem {
             for (Tick tick : par.axesTicks.getValue().ticks.values()) {
                 dgo.graphics.setColor(Color.blue);
                 dgo.graphics.draw(tick.line);
-                if (tick.labelBoundary != null) {
+                if (tick.label != null) {
                     dgo.graphics.setColor(Color.BLACK);
-                    dgo.graphics.draw(tick.labelBoundary);
-                    Rectangle2D bounds = tick.labelBoundary.getBounds2D();
+                    dgo.graphics.draw(tick.label.boundary);
+                    Rectangle2D bounds = tick.label.boundary.getBounds2D();
                     int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
                     int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
                     dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
@@ -345,8 +507,8 @@ public class CoordinateSystem {
 
 
         return new ImmutablePair<AxisTick, AxisTick>(
-                retrieveAxisTick(a1, plot, origin, a2.len()),
-                retrieveAxisTick(a2, plot, origin, a1.len()));
+                retrieveAxisTick(a1, plot, origin, a2),
+                retrieveAxisTick(a2, plot, origin, a1));
     }
 
     /**
@@ -433,7 +595,7 @@ public class CoordinateSystem {
         return histo;
     }
 
-    public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, double adjAxisLen) {
+    public static AxisTick retrieveAxisTick(ExtLine2D axis, SVGPlot plot, Point2D.Double origin, ExtLine2D adjAxis) {
         double toleranceLimit = 4;
 
         TreeMap<Double, List<Tick>> intersections = CoordinateSystem.ticksCalculateOriginDist(axis, plot, origin);
@@ -452,7 +614,7 @@ public class CoordinateSystem {
          * a tick, regardless its length )
          */
         double eqFraction = 0.002; // difference of 1% of the adjacent axis counts like being equal
-        double unitLen = adjAxisLen * eqFraction;
+        double unitLen = adjAxis.len() * eqFraction;
         DoubleTreeMap<List<Tick>> uniformByTick = new DoubleTreeMap<List<Tick>>(CoordinateSystem.precission);
 
         for (Double dst : byTick.keySet()) {
@@ -565,6 +727,9 @@ public class CoordinateSystem {
          * tick distance should be covered with an orthogonal line ... this
          * might be an improvement
          */
+        Tick originTick = new Tick(adjAxis, origin, 0.0);
+        originTick.isMajor = true;
+        res.ticks.put(0.0, originTick);
         return res;
     }
 
