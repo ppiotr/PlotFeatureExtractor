@@ -8,6 +8,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.sun.xml.internal.ws.api.ha.HaInfo;
+import invenio.common.IterablesUtils;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -194,61 +195,108 @@ public class CoordinateSystem {
         double coeff = (double) numMajor / (double) numAssigned;
         double assignmentTolerance = 1.5;
 
-        if (coeff > 1 / assignmentTolerance && coeff < assignmentTolerance) {
-            // we should probably assign labels only to the major ticks ... 1st we detach all the labels.
-            HashMap<TickLabel, PriorityQueue<Tick>> minTicks = new HashMap<TickLabel, PriorityQueue<Tick>>(); // the mapping label -> ordered by distance list of ticks
 
-            Iterable<Tick> majors = Iterables.filter(ticks.ticks.values(), new Predicate<Tick>() {
+        if (coeff > 1 / assignmentTolerance && coeff < assignmentTolerance) {
+            TickLabel[] labels = new TickLabel[numAssigned];
+            int labelsInd = 0;
+
+            for (Tick t : ticks.ticks.values()) {
+                if (t.label != null) {
+                    labels[labelsInd++] = t.label;
+
+                    t.label = null; // detach the label from the previously-attached tick
+                }
+            }
+            TickLabel[] matchableLabels = selectAppropriateLabels(labels, numMajor);
+            // We can sort the selected labels using the distance from the smallest major tick (in order to assure the distance
+            Iterable<Tick> major = Iterables.filter(ticks.ticks.values(), new Predicate<Tick>() {
                 @Override
                 public boolean apply(Tick t) {
                     return t.isMajor;
                 }
             });
+            Tick first = major.iterator().next(); // there does exist at least one, which we already know;          
+            Arrays.sort(matchableLabels, new TickLabelsDistanceFromFirstTickComparator(first.intersection));
 
-            for (Tick t : ticks.ticks.values()) {
-                if (t.label != null) {
-                    PriorityQueue<Tick> labelQueue = new PriorityQueue<Tick>(numMajor, new TicksComparator(t.label.boundary.getBounds2D()));
-                    minTicks.put(t.label, labelQueue);
-                    for (Tick major : majors) {
-                        labelQueue.add(major);
-                    }
-                    t.label = null;
+
+
+            /**
+             * we might still have more ticks than labels... we consider all the
+             * possible assignments preserving the order of distances from the
+             * first tick
+             */
+            Iterable<Tick> minSubsequence = null;
+            double minSum = Double.MAX_VALUE;
+            for (Iterable<Tick> curSubsequence : IterablesUtils.skipN(major, numMajor - numAssigned)) {
+                double curSum = 0;
+                Iterator<Tick> majorIter = curSubsequence.iterator();
+                for (int i = 0; i < matchableLabels.length; i++) {
+                    Tick tick = majorIter.next();
+                    curSum += ExtLine2D.distanceRectangle(tick.intersection, (Rectangle2D.Double) (matchableLabels[i].boundary.getBounds2D()));
+                }
+
+                if (curSum < minSum) {
+                    minSum = curSum;
+                    minSubsequence = curSubsequence;
                 }
             }
 
-            // now we create a global priority queue
-            HashSet<Tick> used = new HashSet<Tick>();
-            PriorityQueue<TickLabel> matchingQueue = new PriorityQueue<TickLabel>(minTicks.size(), new TickLabelsComparator(minTicks));
-            for (TickLabel label: minTicks.keySet()){
-                matchingQueue.add(label);
-            }
-            
-            // now we reassign to only major ticks                        
-            
-            while (!matchingQueue.isEmpty()){
-                TickLabel closestLabel = matchingQueue.poll();
-                Tick closestTick = minTicks.get(closestLabel).peek();
-                if (used.contains(closestTick)){
-                    /// remove all used ticks from the beginning of the queue
-                    PriorityQueue<Tick> q = minTicks.get(closestLabel);
-                    while (used.contains(q.peek())){
-                        q.remove();
-                    }
-                    if (q.isEmpty()){
-                        return; /// all ticks have been used... no further matching is possible
-                    }
-                    matchingQueue.add(closestLabel);
-                } else {
-                    // we have a new assignment ! 
-                    closestTick.label = closestLabel;
-                    used.add(closestTick);
-                }
-                
+
+            Iterator<Tick> majorIter = minSubsequence.iterator();
+            for (int i = 0; i < matchableLabels.length; i++) {
+                // we do not check the existence of "next" because we assure it in the loop condition
+                Tick tick = majorIter.next();
+                tick.label = matchableLabels[i];
             }
         }
 
 
 
+    }
+
+    /**
+     * This method is useful in a situation, when there are more labels than can
+     * be assigned (more preliminarly selected labels than ticks on the axis. In
+     * such a situation we have to select the number of labels equal to the
+     * number of major ticks. In order to do so, we observe that in the most
+     * common case, the labels of axis are aligned in a line (vertical or
+     * horizontal) We first try to guess, which direction is in due this time
+     * (by measuring the variance of centres of the labels in both directions).
+     * Later, we select labels with centres lying as close as possible to the
+     * average centre.
+     *
+     * @param labels the previously assigned labels
+     * @param num number of labels that should be elected
+     * @return
+     */
+    private static TickLabel[] selectAppropriateLabels(TickLabel[] labels, int num) {
+        double avgx = 0;
+        double avgy = 0;
+
+        for (TickLabel l : labels) {
+            avgx += l.boundary.getBounds2D().getCenterX();
+            avgy += l.boundary.getBounds2D().getCenterY();
+        }
+        avgx /= labels.length;
+        avgy /= labels.length;
+
+        // let's calculate which direction is farther from the center 
+
+        double varx = 0;
+        double vary = 0;
+
+        for (TickLabel l : labels) {
+            varx = Math.abs(avgx - l.boundary.getBounds2D().getCenterX());
+            vary = Math.abs(avgy - l.boundary.getBounds2D().getCenterY());
+        } // Both vars are multiplied by the same number ... we can compare them without scaling
+
+        if (varx < vary) {
+            Arrays.sort(labels, new XTickLabelsComparator(avgx));
+        } else {
+            Arrays.sort(labels, new YTickLabelsComparator(avgy));
+        }
+
+        return Arrays.copyOfRange(labels, 0, Math.min(num, labels.length));
     }
 
     /**
@@ -446,8 +494,8 @@ public class CoordinateSystem {
                     dgo.graphics.setColor(Color.BLACK);
                     dgo.graphics.draw(tick.label.boundary);
                     Rectangle2D bounds = tick.label.boundary.getBounds2D();
-                    int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
-                    int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
+                    int mx = (int) Math.round(bounds.getCenterX());
+                    int my = (int) Math.round(bounds.getCenterY());
                     dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
                 }
 
@@ -778,6 +826,72 @@ public class CoordinateSystem {
             return ((double) numPoints) / ((double) (points.size()));
         } else {
             return 0;
+        }
+    }
+
+    /**
+     * An ugly class... should be replaced with a closure expression (which is
+     * currently not available in Java
+     */
+    private static class XTickLabelsComparator implements Comparator<TickLabel> {
+
+        private final double avgx;
+
+        public XTickLabelsComparator(double avgx) {
+            this.avgx = avgx;
+        }
+
+        @Override
+        public int compare(TickLabel o1, TickLabel o2) {
+            double d1 = Math.abs(o1.boundary.getBounds2D().getCenterX() - avgx);
+            double d2 = Math.abs(o2.boundary.getBounds2D().getCenterX() - avgx);
+            if (d1 == d2) {
+                return 0;
+            }
+            return d1 < d2 ? -1 : 1;
+        }
+    }
+
+    /**
+     * An ugly class... should be replaced with a closure expression (which is
+     * currently not available in Java
+     */
+    private static class YTickLabelsComparator implements Comparator<TickLabel> {
+
+        private final double avgy;
+
+        public YTickLabelsComparator(double avgy) {
+            this.avgy = avgy;
+        }
+
+        @Override
+        public int compare(TickLabel o1, TickLabel o2) {
+            double d1 = Math.abs(o1.boundary.getBounds2D().getCenterY() - avgy);
+            double d2 = Math.abs(o2.boundary.getBounds2D().getCenterY() - avgy);
+            if (d1 == d2) {
+                return 0;
+            }
+            return d1 < d2 ? -1 : 1;
+        }
+    }
+
+    private static class TickLabelsDistanceFromFirstTickComparator implements Comparator<TickLabel> {
+
+        private final Point2D.Double referencePoint;
+
+        public TickLabelsDistanceFromFirstTickComparator(Point2D.Double referencePoint) {
+            this.referencePoint = referencePoint;
+        }
+
+        @Override
+        public int compare(TickLabel o1, TickLabel o2) {
+            double d1 = ExtLine2D.distanceRectangle(referencePoint, (Rectangle2D.Double) o1.boundary.getBounds2D());
+            double d2 = ExtLine2D.distanceRectangle(referencePoint, (Rectangle2D.Double) o2.boundary.getBounds2D());
+            if (d1 == d2) {
+                return 0;
+            }
+
+            return d1 > d2 ? 1 : -1;
         }
     }
 }
