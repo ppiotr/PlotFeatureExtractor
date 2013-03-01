@@ -49,12 +49,17 @@ public class SVGPlot {
     public SpatialArray<String> splitTextIndex; /// index used to search for text elements
     public static long searchDivision = 100; // divide into 10000 tiles 
 
+    // The members describing the extracted data
+    public List<CoordinateSystem> coordinateSystems;
+
     public SVGPlot() {
         this.lineSegments = new LinkedList<ExtLine2D>();
         this.points = new LinkedList<Point2D>();
         this.textElements = new HashMap<Shape, String>();
         this.splitTextElements = new HashMap<Shape, String>();
         this.boundary = new Rectangle2D.Double(0, 0, 0, 0);
+    
+        this.coordinateSystems = new LinkedList<CoordinateSystem>(); 
     }
 
     /**

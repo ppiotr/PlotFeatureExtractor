@@ -6,6 +6,7 @@ package plotmetadataextractor;
 
 import java.io.FileNotFoundException;
 import java.util.List;
+import java.util.Random;
 
 /**
  *
@@ -23,6 +24,10 @@ public class PlotMetadataExtractor {
         List<CoordinateSystem> plotAxis = CoordinateSystem.extractCoordinateSystems(plot);
 
         System.out.println("Detected the following number of axis: " + plotAxis.size());
-
+        // Now writing the semantic data
+        OutputWriter ow = new OutputWriter();
+        Random random = new Random();
+        ow.writePlotData(plot, "http://plots.com/" + random.nextInt(100000000));
+        ow.flush();
     }
 }

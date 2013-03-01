@@ -6,19 +6,15 @@ package plotmetadataextractor;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.sun.xml.internal.ws.api.ha.HaInfo;
 import invenio.common.IterablesUtils;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Shape;
-import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,7 +23,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,40 +34,25 @@ import org.apache.commons.lang3.tuple.Pair;
  * @author piotr
  */
 public class CoordinateSystem {
+    // parameters for the coordinate system detection
 
     private static double precission = 4;
     private static double descriptionDistance = 1.7; // the maximal distance of tick description from the tick... expressed as minimal tick
-    Line2D axe1;
-    Line2D axe2;
-    DoubleTreeMap<Line2D> ticks1; // ticks on the 1st axis
-    DoubleTreeMap<Line2D> ticks2; // ticks on the 2nd axis ... mapping the point with the
+    
+    
+    Pair<ExtLine2D, ExtLine2D> axes;
+    public double linesOutside;
+    public double lengthsRatio;
+    public Pair<AxisTick, AxisTick> axesTicks;
+    public Point2D.Double origin;
 
     /**
-     * Returns the same coordinate axis with the axis meaning inverted
+     * Returns the same coordinate axis with the axis meaning being inverted
      *
      * @return
      */
     public CoordinateSystem transpose() {
         return null;
-    }
-
-    /**
-     * Describes parameters of a coordinate system candidate a set of such
-     * objects is then passed through a filter
-     */
-    public static class CoordCandidateParams {
-
-        Pair<ExtLine2D, ExtLine2D> axes;
-        public double linesOutside;
-        public double lengthsRatio;
-        public Pair<AxisTick, AxisTick> axesTicks;
-
-        /**
-         * Transform this minimal description into a full coordinates system
-         */
-        public CoordinateSystem toCoordinateSystem() {
-            return null;
-        }
     }
 
     public static class TickLabel {
@@ -102,7 +82,7 @@ public class CoordinateSystem {
         public double length;
         public double distanceFromTheOrigin;
         public boolean isMajor;
-        private TickLabel label;
+        public TickLabel label;
 
         public Tick(ExtLine2D line, Point2D.Double intersect, double distance) {
             this.line = line;
@@ -249,9 +229,6 @@ public class CoordinateSystem {
                 tick.label = matchableLabels[i];
             }
         }
-
-
-
     }
 
     /**
@@ -305,7 +282,7 @@ public class CoordinateSystem {
      *
      * @param plot
      */
-    private static void matchTicksWithCaptions(SVGPlot plot, CoordCandidateParams coord) {
+    private static void matchTicksWithCaptions(SVGPlot plot, CoordinateSystem coord) {
         matchTicksWithCaptionsAxis(plot, coord.axesTicks.getKey());
         matchTicksWithCaptionsAxis(plot, coord.axesTicks.getValue());
     }
@@ -376,7 +353,7 @@ public class CoordinateSystem {
     public static List<CoordinateSystem> extractCoordinateSystems(SVGPlot plot) {
         LinkedList<CoordinateSystem> result = new LinkedList<CoordinateSystem>();
 
-        LinkedList<CoordCandidateParams> coordParams = new LinkedList<CoordCandidateParams>();
+        LinkedList<CoordinateSystem> coordParams = new LinkedList<CoordinateSystem>();
 
         HashSet<ExtLine2D> alreadyConsideredL = new HashSet<ExtLine2D>();
         for (ExtLine2D interval : plot.orthogonalIntervals.keySet()) {
@@ -384,13 +361,14 @@ public class CoordinateSystem {
             for (ExtLine2D ortInt : plot.orthogonalIntervals.get(interval)) {
                 if (!alreadyConsideredL.contains(ortInt)) {
                     // we haven't considered this pair yet
-                    CoordCandidateParams params = new CoordCandidateParams();
+                    CoordinateSystem params = new CoordinateSystem();
 
                     params.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
                     params.linesOutside = getRatioOfPointsOutside(params.axes, plot.points);
                     // calculations based on the line proportions
                     params.lengthsRatio = getAxisLengthRatio(params.axes);
                     params.axesTicks = retrieveAxisTicks(plot, params.axes);
+                    params.origin = params.axes.getKey().getIntersection(params.axes.getValue());
                     if (initialFilter(params)) {
                         coordParams.add(params);
                     }
@@ -401,16 +379,16 @@ public class CoordinateSystem {
 
         /// we have extracted information about all possible candidates, now we need to determine which ones are the real axes ...
 
-        LinkedList<CoordCandidateParams> coordinateSystems = CoordinateSystem.filterCandidates(coordParams, plot);
-
+        LinkedList<CoordinateSystem> coordinateSystems = CoordinateSystem.filterCandidates(coordParams, plot);
         /// now we need to transform the selected axes into coordinate systems
+        //        for (CoordinateSystem params : coordinateSystems) {
+        //            result.add(params.toCoordinateSystem());
+        //        }
 
-//        for (CoordCandidateParams params : coordinateSystems) {
-//            result.add(params.toCoordinateSystem());
-//        }
-
-        return result;
-
+        plot.coordinateSystems = coordinateSystems;
+        
+        return coordinateSystems;
+        
     }
 
     /**
@@ -420,7 +398,7 @@ public class CoordinateSystem {
      * @param coordParams
      * @return
      */
-    private static boolean initialFilter(CoordCandidateParams params) {
+    private static boolean initialFilter(CoordinateSystem params) {
         //return true;
         return (params.lengthsRatio > 0.7) && (params.lengthsRatio < 1.3);
 
@@ -433,14 +411,16 @@ public class CoordinateSystem {
      * @param coordParams
      * @return
      */
-    private static LinkedList<CoordCandidateParams> filterCandidates(LinkedList<CoordCandidateParams> coordParams, SVGPlot plot) {
+    private static LinkedList<CoordinateSystem> filterCandidates(LinkedList<CoordinateSystem> coordParams, SVGPlot plot) {
         // here we plug a SVM to determine which candidates really describe a coordinates system and which do not
+        LinkedList<CoordinateSystem> results = new LinkedList<CoordinateSystem>();
+        
         Object[] array = coordParams.toArray();
         Arrays.sort(array, new Comparator<Object>() {
             @Override
             public int compare(Object os1, Object os2) {
-                CoordCandidateParams o1 = (CoordCandidateParams) os1;
-                CoordCandidateParams o2 = (CoordCandidateParams) os2;
+                CoordinateSystem o1 = (CoordinateSystem) os1;
+                CoordinateSystem o2 = (CoordinateSystem) os2;
                 int s1 = o1.axesTicks.getKey().ticks.size() + o1.axesTicks.getValue().ticks.size();
                 int s2 = o2.axesTicks.getKey().ticks.size() + o2.axesTicks.getValue().ticks.size();
 
@@ -451,8 +431,11 @@ public class CoordinateSystem {
         // let's draw best 10 !
 
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
+        
         for (int i = 0; i < Math.min(500, array.length); i++) {
-            CoordCandidateParams par = (CoordCandidateParams) array[i];
+            CoordinateSystem par = (CoordinateSystem) array[i];
+            results.add(par);
+            
             matchTicksWithCaptions(plot, par);
 
 
@@ -506,6 +489,7 @@ public class CoordinateSystem {
             } catch (IOException ex) {
                 Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
             }
+            
             CoordinateSystem.retrieveAxisTicks(plot, par.axes);
             System.out.println("Matched ticks with labels");
         }
@@ -514,7 +498,7 @@ public class CoordinateSystem {
         //let's sort by the number of detected ticks
 
         //throw new UnsupportedOperationException("Not yet implemented");
-        return null;
+        return results;
     }
 
     /**
@@ -890,7 +874,7 @@ public class CoordinateSystem {
             if (d1 == d2) {
                 return 0;
             }
-
+            
             return d1 > d2 ? 1 : -1;
         }
     }
