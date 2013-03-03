@@ -6,7 +6,10 @@ package plotmetadataextractor;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import invenio.common.ExtractorGeometryTools;
+import invenio.common.IntervalTree;
 import invenio.common.IterablesUtils;
+import invenio.common.SpatialClusterManager;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Shape;
@@ -15,6 +18,7 @@ import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,8 +42,6 @@ public class CoordinateSystem {
 
     private static double precission = 4;
     private static double descriptionDistance = 1.7; // the maximal distance of tick description from the tick... expressed as minimal tick
-    
-    
     Pair<ExtLine2D, ExtLine2D> axes;
     public double linesOutside;
     public double lengthsRatio;
@@ -53,6 +55,15 @@ public class CoordinateSystem {
      */
     public CoordinateSystem transpose() {
         return null;
+    }
+
+    /**
+     * Returns the rectangle defined by axis of the coordinate system
+     *
+     * @return
+     */
+    public Rectangle2D.Double getBoundary() {
+        return (Rectangle2D.Double) this.axes.getKey().toRectangle().createUnion(this.axes.getValue().toRectangle());
     }
 
     public static class TickLabel {
@@ -233,8 +244,8 @@ public class CoordinateSystem {
 
     /**
      * This method is useful in a situation, when there are more labels than can
-     * be assigned (more preliminarly selected labels than ticks on the axis. In
-     * such a situation we have to select the number of labels equal to the
+     * be assigned (more preliminarily selected labels than ticks on the axis.
+     * In such a situation we have to select the number of labels equal to the
      * number of major ticks. In order to do so, we observe that in the most
      * common case, the labels of axis are aligned in a line (vertical or
      * horizontal) We first try to guess, which direction is in due this time
@@ -386,9 +397,9 @@ public class CoordinateSystem {
         //        }
 
         plot.coordinateSystems = coordinateSystems;
-        
+
         return coordinateSystems;
-        
+
     }
 
     /**
@@ -414,7 +425,7 @@ public class CoordinateSystem {
     private static LinkedList<CoordinateSystem> filterCandidates(LinkedList<CoordinateSystem> coordParams, SVGPlot plot) {
         // here we plug a SVM to determine which candidates really describe a coordinates system and which do not
         LinkedList<CoordinateSystem> results = new LinkedList<CoordinateSystem>();
-        
+
         Object[] array = coordParams.toArray();
         Arrays.sort(array, new Comparator<Object>() {
             @Override
@@ -431,73 +442,24 @@ public class CoordinateSystem {
         // let's draw best 10 !
 
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
-        
+
         for (int i = 0; i < Math.min(500, array.length); i++) {
             CoordinateSystem par = (CoordinateSystem) array[i];
             results.add(par);
-            
+
             matchTicksWithCaptions(plot, par);
-
-
-            dgo.reset();
-
-
-            dgo.graphics.setColor(Color.PINK);
-            for (Shape sh : plot.splitTextElements.keySet()) {
-                dgo.graphics.draw(sh);
-            }
-
-
-
-            dgo.graphics.setColor(Color.red);
-            // drawing the first axis
-
-            dgo.graphics.draw(par.axes.getKey());
-            for (Tick tick : par.axesTicks.getKey().ticks.values()) {
-                dgo.graphics.setColor(Color.red);
-                dgo.graphics.draw(tick.line);
-
-                if (tick.label != null) {
-                    dgo.graphics.setColor(Color.BLACK);
-                    dgo.graphics.draw(tick.label.boundary);
-                    Rectangle2D bounds = tick.label.boundary.getBounds2D();
-                    int mx = (int) Math.round(bounds.getMinX() + (bounds.getWidth() / 2));
-                    int my = (int) Math.round(bounds.getMinY() + (bounds.getHeight() / 2));
-                    dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
-                }
-            }
-
-            dgo.graphics.setColor(Color.blue);
-            dgo.graphics.draw(par.axes.getValue());
-
-            for (Tick tick : par.axesTicks.getValue().ticks.values()) {
-                dgo.graphics.setColor(Color.blue);
-                dgo.graphics.draw(tick.line);
-                if (tick.label != null) {
-                    dgo.graphics.setColor(Color.BLACK);
-                    dgo.graphics.draw(tick.label.boundary);
-                    Rectangle2D bounds = tick.label.boundary.getBounds2D();
-                    int mx = (int) Math.round(bounds.getCenterX());
-                    int my = (int) Math.round(bounds.getCenterY());
-                    dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
-                }
-
-            }
-
             try {
-                dgo.flush(new File("/tmp/detected_" + String.valueOf(i) + ".png"));
+                DebugGraphicalOutput.dumpCoordinateSystem(plot, par, "/tmp/detected_" + String.valueOf(i) + ".png");
             } catch (IOException ex) {
-                Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, "Saving a debug output file failed", ex);
             }
-            
-            CoordinateSystem.retrieveAxisTicks(plot, par.axes);
+
             System.out.println("Matched ticks with labels");
         }
-
-
         //let's sort by the number of detected ticks
-
         //throw new UnsupportedOperationException("Not yet implemented");
+        List<CoordinateSystem> nonIntersecting = CoordinateSystem.chooseBestAmongIntersecting(plot, results);
+
         return results;
     }
 
@@ -837,6 +799,135 @@ public class CoordinateSystem {
     }
 
     /**
+     * In some cases, there are more coordinate system candidates defining
+     * intersecting areas. (By the defined area we understand the rectangle
+     * spanned by both axis).
+     *
+     * This method detects all classes of coordinate system candidates which
+     * intersect each other and elects the best candidate, which is further
+     * considered.
+     *
+     * Sometimes a plot deliberately contains several redundant axis, but in
+     * such a case, we can without loosing generality, consider only one pair.
+     *
+     * The criteria used to select the best candidate include: - The size of the
+     * defined area - The number of detected ticks on both axis - The number of
+     * ticks matched with labels - The alignment of labels (they should lie in a
+     * row) - The distance of axis label from the end of the axis
+     *
+     * @param plot The plot from which we extract the axis
+     * @param candidates previously detected coordinate system candidates
+     * @return a non-intersecting list of candidates
+     */
+    private static List<CoordinateSystem> chooseBestAmongIntersecting(SVGPlot plot, List<CoordinateSystem> candidates) {
+        List<CoordinateSystem> result = new LinkedList<CoordinateSystem>();
+        // 1) we need to scale our coordinate systems so taht after roundign to integer, no frangments collapse
+        DoubleTreeMap<Boolean> xs = new DoubleTreeMap<Boolean>(0.001);
+        DoubleTreeMap<Boolean> ys = new DoubleTreeMap<Boolean>(0.001);
+
+        for (CoordinateSystem candidate : candidates) {
+            xs.put(candidate.axes.getKey().x1, true);
+            xs.put(candidate.axes.getKey().x2, true);
+            ys.put(candidate.axes.getKey().y2, true);
+            ys.put(candidate.axes.getKey().y1, true);
+        }
+
+        Double prevX = null;
+        double minDifX = Double.MAX_VALUE;
+
+        for (Double x : xs.keySet()) {
+            if (prevX != null) {
+                if (x - prevX < minDifX) {
+                    minDifX = x - prevX;
+                }
+            }
+            prevX = x;
+        }
+
+        Double prevY = null;
+        double minDifY = Double.MAX_VALUE;
+
+        for (Double y : ys.keySet()) {
+            if (prevY != null) {
+                if (y - prevY < minDifY) {
+                    minDifY = y - prevY;
+                }
+            }
+            prevY = y;
+        }
+
+        double scaleCoeff = 1 / Math.min(minDifX, minDifY); // coeffs cannot be 0 because we assured that we have only one copy of each point !
+
+        // 2) We have to detect intersecting clusters .. we use the same intervals tree technique as in the plots exractor
+
+        IntervalTree<CoordinateSystem> intX = new IntervalTree<CoordinateSystem>((int) Math.round(plot.boundary.getMinX() * scaleCoeff), (int) Math.round(plot.boundary.getMaxX() * scaleCoeff));
+        IntervalTree<CoordinateSystem> intY = new IntervalTree<CoordinateSystem>((int) Math.round(plot.boundary.getMinY() * scaleCoeff), (int) Math.round(plot.boundary.getMaxY() * scaleCoeff));
+
+        for (CoordinateSystem candidate : candidates) {
+            Rectangle2D.Double boundary = candidate.getBoundary();
+            intX.addInterval((int) Math.round(boundary.getMinX() * scaleCoeff), (int) Math.round((boundary.getMaxX()) * scaleCoeff), candidate);
+            intY.addInterval((int) Math.round(boundary.getMinY() * scaleCoeff), (int) Math.round((boundary.getMaxY()) * scaleCoeff), candidate);
+        }
+
+        SpatialClusterManager<CoordinateSystem> scm = new SpatialClusterManager<CoordinateSystem>(ExtractorGeometryTools.extendRectangle(ExtractorGeometryTools.roundScaleRectangle(plot.boundary, scaleCoeff), 10, 10), 1, 1);
+        try {
+            int stepNum = 0;
+            for (CoordinateSystem candidate : candidates) {
+                Rectangle roundScaleRectangle = ExtractorGeometryTools.roundScaleRectangle(candidate.getBoundary(), scaleCoeff);
+                scm.addRectangle(ExtractorGeometryTools.roundScaleRectangle(candidate.getBoundary(), scaleCoeff), candidate);
+                Map<Rectangle, List<CoordinateSystem>> finalBoundaries = scm.getFinalBoundaries();
+                // DEBUG: Let's wirte information about all the clsters now ! (images by cluster)
+                int clusterNum = 0;
+                String stepDirName = "/tmp/clusteringstep_" + stepNum;
+                File stepDir = new File(stepDirName);
+                stepDir.mkdir();
+
+                for (Rectangle clusterBoundary : finalBoundaries.keySet()) {
+                    String clusterDirName = stepDirName + "/cluster_" + clusterNum;
+                    File clusterDir = new File(clusterDirName);
+                    clusterDir.mkdir();
+
+                    DebugGraphicalOutput.drawFileWithRectangle(plot, ExtractorGeometryTools.roundScaleRectangle(clusterBoundary, 1/scaleCoeff), clusterDirName + "/cluster_overview.png");
+                    int csNum = 0;
+                    for (CoordinateSystem cs : finalBoundaries.get(clusterBoundary)) {
+                        DebugGraphicalOutput.dumpCoordinateSystem(plot, cs, clusterDirName + "/cs_" + csNum + ".png");
+                        csNum++;
+                    }
+                    clusterNum++;
+                }
+                stepNum++;
+            }
+
+        } catch (Exception ex) {
+            Logger.getLogger(CoordinateSystem.class.getName()).log(Level.SEVERE, "Something got wrong when clustering the objects", ex);
+        }
+
+        Collection<List<CoordinateSystem>> values = scm.getFinalBoundaries().values();
+
+        // 3) now for every cluster, we have to determine, which candidate is the best
+
+        return result;
+    }
+
+    /**
+     * A comparator of two coordinate systems. The comparison is performed on a
+     * basis of criteria maximising the chance of a coordinate system (fully
+     * extracted) to truly be a coordinate system of the original plot. We take
+     * into account the following measures: - the size of the covered area. -
+     * the number of extracted ticks (on both axis) - the number of ticks
+     * matched with labels - the colinearity of labels - graphical primitives
+     * located outside of the boundary but close to it
+     *
+     */
+    private static class CoordinateSystemComparator implements Comparator<CoordinateSystem> {
+
+        @Override
+        public int compare(CoordinateSystem o1, CoordinateSystem o2) {
+            throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        }
+    }
+
+    /**
      * An ugly class... should be replaced with a closure expression (which is
      * currently not available in Java
      */
@@ -874,7 +965,7 @@ public class CoordinateSystem {
             if (d1 == d2) {
                 return 0;
             }
-            
+
             return d1 > d2 ? 1 : -1;
         }
     }

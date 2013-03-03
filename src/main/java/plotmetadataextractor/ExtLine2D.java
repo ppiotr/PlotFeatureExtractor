@@ -113,6 +113,10 @@ public class ExtLine2D extends Line2D.Double {
         return new Point2D.Double(l1.getP1().getX() - uv1.getKey() * dist, l1.getP1().getY() - uv1.getValue() * dist);
     }
 
+    Rectangle2D.Double toRectangle() {
+        return new Rectangle2D.Double(this.x1, this.y1, this.x2 - this.x1, this.y2 - this.y1);
+    }
+
     /**
      * This class encodes parameters of a line Every line can be described in a
      * form: ax + by + c = 0
