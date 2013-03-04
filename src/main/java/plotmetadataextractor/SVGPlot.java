@@ -103,7 +103,7 @@ public class SVGPlot {
     }
 
     public final void calculateOrthogonalIntervals() {
-        System.out.println("Processing line intervals");
+        //System.out.println("Processing line intervals");
         HashMap<Integer, List<ExtLine2D>> linesByAngle = new HashMap<Integer, List<ExtLine2D>>();
         HashMap<ExtLine2D, List<ExtLine2D>> intersecting = new HashMap<ExtLine2D, List<ExtLine2D>>();
 
@@ -232,7 +232,8 @@ public class SVGPlot {
                     if (curNode instanceof TextNode) {
                         this.addTextNode((TextNode) curNode, curTransform);
                     } else {
-                        System.out.println("Encountered Unknown type of a node !!");
+                        System.err.println("Encountered Unknown type of a node !!");
+                        
                     }
                 }
             }
@@ -337,6 +338,9 @@ public class SVGPlot {
 
     public final void addTextNode(TextNode tn, AffineTransform curTransform) {
         Rectangle2D bounds = tn.getBounds();
+        if (bounds == null){
+            return;
+        }
         String text = tn.getText();
         Shape effectiveBoundary = curTransform.createTransformedShape(bounds);
         this.includeTextBlock(effectiveBoundary, text);
@@ -461,6 +465,6 @@ public class SVGPlot {
             }
         }
         this.lineSegments = result;
-        System.out.println("Removed " + String.valueOf(numRemoved) + " line segments which have been detected as redundant");
+        //System.out.println("Removed " + String.valueOf(numRemoved) + " line segments which have been detected as redundant");
     }
 }

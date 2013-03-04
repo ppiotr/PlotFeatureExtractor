@@ -41,11 +41,11 @@ public class CoordinateSystemTest extends TestCase {
 //        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
 //
 
-        plot = getSamplePlot2();
-        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
-
-        plot = getSamplePlot3();
-        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
+//        plot = getSamplePlot2();
+//        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
+//
+//        plot = getSamplePlot3();
+//        extractCoordinateSystems = CoordinateSystem.extractCoordinateSystems(plot);
         
     }
 

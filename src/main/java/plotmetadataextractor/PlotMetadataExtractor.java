@@ -5,6 +5,9 @@
 package plotmetadataextractor;
 
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.List;
 import java.util.Random;
 
@@ -14,12 +17,12 @@ import java.util.Random;
  */
 public class PlotMetadataExtractor {
 
-
-
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) throws FileNotFoundException {
+        
+        
         SVGPlot plot = new SVGPlot(args[0]);
         List<CoordinateSystem> plotAxis = CoordinateSystem.extractCoordinateSystems(plot);
 
@@ -27,6 +30,8 @@ public class PlotMetadataExtractor {
         // Now writing the semantic data
         OutputWriter ow = new OutputWriter();
         Random random = new Random();
+
+        
         ow.writePlotData(plot, "http://plots.com/" + random.nextInt(100000000));
         ow.flush();
     }
