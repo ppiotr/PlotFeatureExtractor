@@ -24,7 +24,7 @@ public class PlotMetadataExtractor {
         
         
         SVGPlot plot = new SVGPlot(args[0]);
-        List<CoordinateSystem> plotAxis = CoordinateSystem.extractCoordinateSystems(plot);
+        List<CoordinateSystem> plotAxis = CoordinateSystem.extractCSCandidates(plot);
 
         System.out.println("Detected the following number of axis: " + plotAxis.size());
         // Now writing the semantic data

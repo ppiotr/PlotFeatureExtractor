@@ -6,6 +6,7 @@ package plotmetadataextractor;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.hp.hpl.jena.util.iterator.ArrayIterator;
 import invenio.common.ExtractorGeometryTools;
 import invenio.common.IntervalTree;
 import invenio.common.IterablesUtils;
@@ -278,6 +279,8 @@ public class CoordinateSystem {
             vary = Math.abs(avgy - l.boundary.getBounds2D().getCenterY());
         } // Both vars are multiplied by the same number ... we can compare them without scaling
 
+        
+        
         if (varx < vary) {
             Arrays.sort(labels, new XTickLabelsComparator(avgx));
         } else {
@@ -287,6 +290,44 @@ public class CoordinateSystem {
         return Arrays.copyOfRange(labels, 0, Math.min(num, labels.length));
     }
 
+    public static Pair<Double, Double> calculateLabelsLocationVariance(Iterable<TickLabel> labels) {
+        double avgx = 0;
+        double avgy = 0;
+
+        for (TickLabel l : labels) {
+            avgx += l.boundary.getBounds2D().getCenterX();
+            avgy += l.boundary.getBounds2D().getCenterY();
+        }
+        avgx /= Iterables.size(labels);
+        avgy /= Iterables.size(labels);
+
+        // let's calculate which direction is farther from the center 
+
+        double varx = 0;
+        double vary = 0;
+
+        for (TickLabel l : labels) {
+            varx = Math.abs(avgx - l.boundary.getBounds2D().getCenterX());
+            vary = Math.abs(avgy - l.boundary.getBounds2D().getCenterY());
+        }
+
+        return new ImmutablePair<Double, Double>(varx / Iterables.size(labels), vary / Iterables.size(labels));
+    }
+
+    /**
+     * Processing a list of Ticks and extracting all the labels associated with them
+     * @param ticks
+     * @return 
+     */
+    public static List<TickLabel> extractTickLabels(Iterable<Tick> ticks){
+        LinkedList<TickLabel> result = new LinkedList<TickLabel>();
+        for (Tick t: ticks){
+            if (t.label != null){
+                result.add(t.label);
+            }
+        }
+        return result;
+    }
     /**
      * This method embarks on a remarkable quest of matching ticks of axis
      * candidates with possible labels, which might indicate numerical values
@@ -356,15 +397,26 @@ public class CoordinateSystem {
     }
 
     /**
+     * Extracts all candidates which can in turn be considered coordinate
+     * systems. This method performs a rough preliminary filtering of candidates
+     * based on very basic properties.
+     *
+     * @param plot
+     * @return
+     */
+//    public static List<CoordinateSystem> extractCSCandidates(SVGPlot plot) {
+//        return null;
+//    }
+    /**
      * Detects all the coordinate systems encoded in a graph
      *
      * @param plot
      * @return
      */
-    public static List<CoordinateSystem> extractCoordinateSystems(SVGPlot plot) {
+    public static List<CoordinateSystem> extractCSCandidates(SVGPlot plot) {
         LinkedList<CoordinateSystem> result = new LinkedList<CoordinateSystem>();
 
-        LinkedList<CoordinateSystem> coordParams = new LinkedList<CoordinateSystem>();
+        LinkedList<CoordinateSystem> coordinateSystems = new LinkedList<CoordinateSystem>();
 
         HashSet<ExtLine2D> alreadyConsideredL = new HashSet<ExtLine2D>();
         for (ExtLine2D interval : plot.orthogonalIntervals.keySet()) {
@@ -372,16 +424,15 @@ public class CoordinateSystem {
             for (ExtLine2D ortInt : plot.orthogonalIntervals.get(interval)) {
                 if (!alreadyConsideredL.contains(ortInt)) {
                     // we haven't considered this pair yet
-                    CoordinateSystem params = new CoordinateSystem();
-
-                    params.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
-                    params.linesOutside = getRatioOfPointsOutside(params.axes, plot.points);
+                    CoordinateSystem coordSystems = new CoordinateSystem();
+                    coordSystems.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
+                    coordSystems.linesOutside = getRatioOfPointsOutside(coordSystems.axes, plot.points);
                     // calculations based on the line proportions
-                    params.lengthsRatio = getAxisLengthRatio(params.axes);
-                    params.axesTicks = retrieveAxisTicks(plot, params.axes);
-                    params.origin = params.axes.getKey().getIntersection(params.axes.getValue());
-                    if (initialFilter(params)) {
-                        coordParams.add(params);
+                    coordSystems.lengthsRatio = getAxisLengthRatio(coordSystems.axes);
+                    coordSystems.axesTicks = retrieveAxisTicks(plot, coordSystems.axes);
+                    coordSystems.origin = coordSystems.axes.getKey().getIntersection(coordSystems.axes.getValue());
+                    if (initialFilter(coordSystems)) {
+                        coordinateSystems.add(coordSystems);
                     }
                 }
             }
@@ -390,7 +441,8 @@ public class CoordinateSystem {
 
         /// we have extracted information about all possible candidates, now we need to determine which ones are the real axes ...
 
-        LinkedList<CoordinateSystem> coordinateSystems = CoordinateSystem.filterCandidates(coordParams, plot);
+        //LinkedList<CoordinateSystem> coordinateSystems = CoordinateSystem.filterCandidates(coordParams, plot);
+
         /// now we need to transform the selected axes into coordinate systems
         //        for (CoordinateSystem params : coordinateSystems) {
         //            result.add(params.toCoordinateSystem());
@@ -887,7 +939,7 @@ public class CoordinateSystem {
                     File clusterDir = new File(clusterDirName);
                     clusterDir.mkdir();
 
-                    DebugGraphicalOutput.drawFileWithRectangle(plot, ExtractorGeometryTools.roundScaleRectangle(clusterBoundary, 1/scaleCoeff), clusterDirName + "/cluster_overview.png");
+                    DebugGraphicalOutput.drawFileWithRectangle(plot, ExtractorGeometryTools.roundScaleRectangle(clusterBoundary, 1 / scaleCoeff), clusterDirName + "/cluster_overview.png");
                     int csNum = 0;
                     for (CoordinateSystem cs : finalBoundaries.get(clusterBoundary)) {
                         DebugGraphicalOutput.dumpCoordinateSystem(plot, cs, clusterDirName + "/cs_" + csNum + ".png");

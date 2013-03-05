@@ -48,7 +48,6 @@ public class SVGPlot {
     public HashMap<Shape, String> splitTextElements; /// text elements consisting of separate words
     public SpatialArray<String> splitTextIndex; /// index used to search for text elements
     public static long searchDivision = 100; // divide into 10000 tiles 
-
     // The members describing the extracted data
     public List<CoordinateSystem> coordinateSystems;
 
@@ -58,8 +57,8 @@ public class SVGPlot {
         this.textElements = new HashMap<Shape, String>();
         this.splitTextElements = new HashMap<Shape, String>();
         this.boundary = new Rectangle2D.Double(0, 0, 0, 0);
-    
-        this.coordinateSystems = new LinkedList<CoordinateSystem>(); 
+
+        this.coordinateSystems = new LinkedList<CoordinateSystem>();
     }
 
     /**
@@ -78,10 +77,10 @@ public class SVGPlot {
         try {
             String parser = XMLResourceDescriptor.getXMLParserClassName();
             SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
-            String uri = "file://" +fName;
+            String uri = "file://" + fName;
             InputStream is = new FileInputStream(new File(fName));
             Document doc = f.createDocument(uri, is);
-            
+
             NodeList e1 = doc.getElementsByTagName("path");
             NodeList e2 = doc.getElementsByTagName("line");
 
@@ -233,7 +232,7 @@ public class SVGPlot {
                         this.addTextNode((TextNode) curNode, curTransform);
                     } else {
                         System.err.println("Encountered Unknown type of a node !!");
-                        
+
                     }
                 }
             }
@@ -338,7 +337,7 @@ public class SVGPlot {
 
     public final void addTextNode(TextNode tn, AffineTransform curTransform) {
         Rectangle2D bounds = tn.getBounds();
-        if (bounds == null){
+        if (bounds == null) {
             return;
         }
         String text = tn.getText();

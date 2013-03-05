@@ -9,13 +9,10 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.Shape;
-import java.awt.Stroke;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
@@ -44,6 +41,7 @@ public class DebugGraphicalOutput {
         return instance;
     }
 
+    
     /**
      * Flushes the content of the graphical debug message into a file
      *
@@ -64,6 +62,11 @@ public class DebugGraphicalOutput {
         this.graphics.setColor(Color.BLACK);
     }
 
+    public final void reset(int width, int height){
+        this.width = width;
+        this.height = height;
+        this.reset();
+    }
     /**
      * Dumps the coordinates system into a file. Draws all the lines from the
      * plot as less visible than lines of the coordinate system
@@ -74,7 +77,7 @@ public class DebugGraphicalOutput {
      */
     public static void dumpCoordinateSystem(SVGPlot plot, CoordinateSystem cs, String fname) throws IOException {
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
-        dgo.reset();
+        dgo.reset((int) Math.round(plot.boundary.getWidth()), (int) Math.round(plot.boundary.getHeight()));
 
         dgo.graphics.setColor(Color.PINK);
 
