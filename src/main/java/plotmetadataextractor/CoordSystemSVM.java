@@ -4,17 +4,11 @@
  */
 package plotmetadataextractor;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FilenameFilter;
-import java.text.DecimalFormat;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
-import plotmetadataextractor.CoordinateSystem.AxisTick;
-import plotmetadataextractor.CoordinateSystem.Tick;
 import plotmetadataextractor.CoordinateSystem.TickLabel;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
@@ -80,54 +74,56 @@ public class CoordSystemSVM {
          *
          */
         public CSFeatureVector(CoordinateSystem cs, SVGPlot plot) {
+            this.features = new LinkedList<Double>();
+            
             this.features.add(cs.lengthsRatio);
             this.features.add(cs.linesOutside);
+            this.features.add((double) cs.getTicksNum());
+            this.features.add(cs.getTicksWithLabelFraction());
+            this.features.add(CSFeatureVector.widthLengthFraction(plot, cs));
+            this.features.add(CSFeatureVector.calculateMinimalRelativeLabelsVariace(plot, cs));
+        }
 
-            int numTicks = cs.axesTicks.getKey().ticks.size() + cs.axesTicks.getValue().ticks.size();
-            this.features.add((double) numTicks);
-            // number of ticks having labels assigned
-            int numMatchedTicks = Iterables.size(Iterables.filter(Iterables.concat(cs.axesTicks.getKey().ticks.values(), cs.axesTicks.getValue().ticks.values()), new Predicate<CoordinateSystem.Tick>() {
-                @Override
-                public boolean apply(Tick input) {
-                    return input.label != null;
-                }
-            }));
-            if (numTicks > 0) {
-                this.features.add((double) numMatchedTicks / (double) numTicks);
-            } else {
-                this.features.add(0.0);
-
-            }
-            if (numTicks > 0 && numMatchedTicks > 0) {
+        /**
+         * Calculates the relative variance of locations of ticks in the minimal
+         * direction. (Relative to the width/height of the entire plot)
+         *
+         * @return
+         */
+        private static double calculateMinimalRelativeLabelsVariace(SVGPlot plot, CoordinateSystem cs) {
+            if (cs.getTicksNum() > 0 && cs.getTicksWithLabelsNum() > 0) {
                 /**
                  * we calculate , how far are the labels from average(choosing
                  * the minimal value and scaling to the width of the plotS)
                  */
                 List<TickLabel> labelsX = CoordinateSystem.extractTickLabels(cs.axesTicks.getKey().ticks.values());
                 List<TickLabel> labelsY = CoordinateSystem.extractTickLabels(cs.axesTicks.getValue().ticks.values());
-                double minVar  = 1.0;
+                double minVar = 1.0;
                 List<Double> vars = new LinkedList<Double>();
-                if (labelsX.size() > 0){
+                if (labelsX.size() > 0) {
                     Pair<Double, Double> v = CoordinateSystem.calculateLabelsLocationVariance(labelsX);
                     vars.add(v.getKey() / plot.boundary.getWidth());
-                    vars.add(v.getValue() / plot.boundary.getHeight());                 
+                    vars.add(v.getValue() / plot.boundary.getHeight());
                 }
-                if (labelsY.size() > 0){
+                if (labelsY.size() > 0) {
                     Pair<Double, Double> v = CoordinateSystem.calculateLabelsLocationVariance(labelsY);
                     vars.add(v.getKey() / plot.boundary.getWidth());
-                    vars.add(v.getValue() / plot.boundary.getHeight());                 
+                    vars.add(v.getValue() / plot.boundary.getHeight());
                 }
-                for (Double v: vars){
-                    if (v<minVar){
+                for (Double v : vars) {
+                    if (v < minVar) {
                         minVar = v;
                     }
                 }
-                this.features.add(minVar);
+                return minVar;
 
             } else {
-                this.features.add(1.0);
+                return 1.0;
             }
+        }
 
+        private static double widthLengthFraction(SVGPlot plot, CoordinateSystem cs) {
+            return (cs.axes.getKey().len() + cs.axes.getValue().len()) / (plot.boundary.getHeight() + plot.boundary.getWidth());
         }
 
         /**
@@ -175,7 +171,7 @@ public class CoordSystemSVM {
         });
 
         for (String svgFileName : svgFileNames) {
-            SVGPlot svgPlot = new SVGPlot(svgFileName);
+            SVGPlot svgPlot = new SVGPlot(new File(plotsDirName, svgFileName));
             List<CoordinateSystem> candidates = CoordinateSystem.extractCSCandidates(svgPlot);
             for (CoordinateSystem csCandidate : candidates) {
                 CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
@@ -193,7 +189,9 @@ public class CoordSystemSVM {
                     outputFile = new File(samplesDirName, fname);
                     dupInd++;
                 } while (outputFile.exists());
-                DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, fname);
+                DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, outputFile.getAbsolutePath());
+                vec = new CSFeatureVector(csCandidate, svgPlot);
+
             }
         }
 
@@ -229,5 +227,4 @@ public class CoordSystemSVM {
     private static List<CSFeatureVector> getFeaturesFromDirectory(String dirName) {
         throw new NotImplementedException();
     }
-    
 }

@@ -4,15 +4,29 @@
  */
 package plotmetadataextractor;
 
+import com.hp.hpl.jena.mem.BunchMap;
 import invenio.common.Images;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.Shape;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.imageio.ImageIO;
+import org.apache.batik.transcoder.TranscoderException;
+import org.apache.batik.transcoder.TranscoderInput;
+import org.apache.batik.transcoder.TranscoderOutput;
+import org.apache.batik.transcoder.image.PNGTranscoder;
 
 /**
  *
@@ -25,10 +39,13 @@ public class DebugGraphicalOutput {
     public Graphics2D graphics;
     public int width;
     public int height;
+    private HashMap<String, BufferedImage> plotImages;
 
     private DebugGraphicalOutput() {
         this.width = 1000;
         this.height = 1000;
+
+        this.plotImages = new HashMap<String, BufferedImage>();
         //this.image = new BufferedImage(this.width, this.height, BufferedImage.TYPE_INT_RGB);
         //this.graphics = (Graphics2D) this.image.getGraphics();
         this.reset();
@@ -41,7 +58,6 @@ public class DebugGraphicalOutput {
         return instance;
     }
 
-    
     /**
      * Flushes the content of the graphical debug message into a file
      *
@@ -62,11 +78,12 @@ public class DebugGraphicalOutput {
         this.graphics.setColor(Color.BLACK);
     }
 
-    public final void reset(int width, int height){
+    public final void reset(int width, int height) {
         this.width = width;
         this.height = height;
         this.reset();
     }
+
     /**
      * Dumps the coordinates system into a file. Draws all the lines from the
      * plot as less visible than lines of the coordinate system
@@ -77,18 +94,30 @@ public class DebugGraphicalOutput {
      */
     public static void dumpCoordinateSystem(SVGPlot plot, CoordinateSystem cs, String fname) throws IOException {
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
-        dgo.reset((int) Math.round(plot.boundary.getWidth()), (int) Math.round(plot.boundary.getHeight()));
+        dgo.reset((int) Math.round(plot.boundary.getWidth()) + 10, (int) Math.round(plot.boundary.getHeight()) + 10);
 
-        dgo.graphics.setColor(Color.PINK);
+        dgo.graphics.drawImage(dgo.getPlotImage(plot), AffineTransform.getRotateInstance(0), null);
+        
+//        dgo.graphics.setColor(Color.PINK);
+//        dgo.graphics.setTransform(AffineTransform.getTranslateInstance(-plot.boundary.getMinX() + 5, -plot.boundary.getMinY() + 5));
+//        for (Shape sh : plot.splitTextElements.keySet()) {
+//            dgo.graphics.draw(sh);
+//        }
+//
+//        dgo.graphics.setColor(new Color(127, 127, 127, 80));
+//        for (ExtLine2D line : plot.lineSegments) {
+//            dgo.graphics.draw(line);
+//        }
 
-        for (Shape sh : plot.splitTextElements.keySet()) {
-            dgo.graphics.draw(sh);
-        }
+        dgo.graphics.setStroke(new BasicStroke(4));
 
         dgo.graphics.setColor(Color.red);
         // drawing the first axis
 
         dgo.graphics.draw(cs.axes.getKey());
+        
+                dgo.graphics.setStroke(new BasicStroke(2));
+
         for (CoordinateSystem.Tick tick : cs.axesTicks.getKey().ticks.values()) {
             dgo.graphics.setColor(Color.red);
             dgo.graphics.draw(tick.line);
@@ -102,9 +131,11 @@ public class DebugGraphicalOutput {
                 dgo.graphics.drawLine((int) Math.round(tick.intersection.getX()), (int) Math.round(tick.intersection.getY()), mx, my);
             }
         }
+        dgo.graphics.setStroke(new BasicStroke(4));
 
         dgo.graphics.setColor(Color.blue);
         dgo.graphics.draw(cs.axes.getValue());
+        dgo.graphics.setStroke(new BasicStroke(2));
 
         for (CoordinateSystem.Tick tick : cs.axesTicks.getValue().ticks.values()) {
             dgo.graphics.setColor(Color.blue);
@@ -124,6 +155,42 @@ public class DebugGraphicalOutput {
         dgo.graphics.fill(cs.getBoundary());
 
         dgo.flush(new File(fname));
+    }
+
+    private BufferedImage getPlotImage(SVGPlot plot) {
+        if (this.plotImages.containsKey(plot.sourceFile.getAbsolutePath())) {
+            return this.plotImages.get(plot.sourceFile.getAbsolutePath());
+        }
+        BufferedImage result;
+
+        PNGTranscoder t = new PNGTranscoder();
+        String svgURI = plot.sourceFile.toURI().toString();
+        TranscoderInput input = new TranscoderInput(svgURI);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        TranscoderOutput output = new TranscoderOutput(bos);
+        try {
+            t.transcode(input, output);
+            bos.flush();
+            bos.close();
+        } catch (IOException ex) {
+            Logger.getLogger(DebugGraphicalOutput.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        } catch (TranscoderException ex) {
+            Logger.getLogger(DebugGraphicalOutput.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        }
+        // reading the stream into a buffered image
+        
+        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+        try {
+            result = ImageIO.read(bis);
+        } catch (IOException ex) {
+            Logger.getLogger(DebugGraphicalOutput.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        }
+        this.plotImages.put(plot.sourceFile.getAbsolutePath(), result);
+        return result;
     }
 
     /**

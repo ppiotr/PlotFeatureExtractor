@@ -6,12 +6,10 @@ package plotmetadataextractor;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
-import com.hp.hpl.jena.util.iterator.ArrayIterator;
 import invenio.common.ExtractorGeometryTools;
 import invenio.common.IntervalTree;
 import invenio.common.IterablesUtils;
 import invenio.common.SpatialClusterManager;
-import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.geom.Point2D;
@@ -33,6 +31,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  *
@@ -55,9 +54,45 @@ public class CoordinateSystem {
      * @return
      */
     public CoordinateSystem transpose() {
-        return null;
+        throw new NotImplementedException();
     }
 
+    /**
+     * Returns the total number of ticks matched in this coordinate system
+     *
+     * @return
+     */
+    public int getTicksNum() {
+        return this.axesTicks.getKey().ticks.size() + this.axesTicks.getValue().ticks.size();
+    }
+
+    /**
+     * Calculates, what fraction of all the ticks present in the coordinate system, has labels assigned
+     * @return 
+     */
+    public double getTicksWithLabelFraction() {
+        if (this.getTicksNum() > 0) {
+            return (double) this.getTicksWithLabelsNum() / (double) this.getTicksNum();
+        } else {
+            return 0.0;
+        }
+    }
+
+    /**
+     * Returns the number of ticks having labels assigned
+     *
+     * @return
+     */
+    public int getTicksWithLabelsNum() {
+        return Iterables.size(Iterables.filter(Iterables.concat(this.axesTicks.getKey().ticks.values(), this.axesTicks.getValue().ticks.values()), new Predicate<CoordinateSystem.Tick>() {
+            @Override
+            public boolean apply(Tick input) {
+                return input.label != null;
+            }
+        }));
+    }
+
+    
     /**
      * Returns the rectangle defined by axis of the coordinate system
      *
@@ -219,7 +254,7 @@ public class CoordinateSystem {
              */
             Iterable<Tick> minSubsequence = null;
             double minSum = Double.MAX_VALUE;
-            for (Iterable<Tick> curSubsequence : IterablesUtils.skipN(major, numMajor - numAssigned)) {
+            for (Iterable<Tick> curSubsequence : IterablesUtils.skipN(major, numMajor - matchableLabels.length)) {
                 double curSum = 0;
                 Iterator<Tick> majorIter = curSubsequence.iterator();
                 for (int i = 0; i < matchableLabels.length; i++) {
@@ -279,8 +314,8 @@ public class CoordinateSystem {
             vary = Math.abs(avgy - l.boundary.getBounds2D().getCenterY());
         } // Both vars are multiplied by the same number ... we can compare them without scaling
 
-        
-        
+
+
         if (varx < vary) {
             Arrays.sort(labels, new XTickLabelsComparator(avgx));
         } else {
@@ -315,19 +350,22 @@ public class CoordinateSystem {
     }
 
     /**
-     * Processing a list of Ticks and extracting all the labels associated with them
+     * Processing a list of Ticks and extracting all the labels associated with
+     * them
+     *
      * @param ticks
-     * @return 
+     * @return
      */
-    public static List<TickLabel> extractTickLabels(Iterable<Tick> ticks){
+    public static List<TickLabel> extractTickLabels(Iterable<Tick> ticks) {
         LinkedList<TickLabel> result = new LinkedList<TickLabel>();
-        for (Tick t: ticks){
-            if (t.label != null){
+        for (Tick t : ticks) {
+            if (t.label != null) {
                 result.add(t.label);
             }
         }
         return result;
     }
+
     /**
      * This method embarks on a remarkable quest of matching ticks of axis
      * candidates with possible labels, which might indicate numerical values
@@ -424,16 +462,19 @@ public class CoordinateSystem {
             for (ExtLine2D ortInt : plot.orthogonalIntervals.get(interval)) {
                 if (!alreadyConsideredL.contains(ortInt)) {
                     // we haven't considered this pair yet
-                    CoordinateSystem coordSystems = new CoordinateSystem();
-                    coordSystems.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
-                    coordSystems.linesOutside = getRatioOfPointsOutside(coordSystems.axes, plot.points);
+                    CoordinateSystem coordSystem = new CoordinateSystem();
+                    coordSystem.axes = new ImmutablePair<ExtLine2D, ExtLine2D>(interval, ortInt);
+                    coordSystem.linesOutside = getRatioOfPointsOutside(coordSystem.axes, plot.points);
                     // calculations based on the line proportions
-                    coordSystems.lengthsRatio = getAxisLengthRatio(coordSystems.axes);
-                    coordSystems.axesTicks = retrieveAxisTicks(plot, coordSystems.axes);
-                    coordSystems.origin = coordSystems.axes.getKey().getIntersection(coordSystems.axes.getValue());
-                    if (initialFilter(coordSystems)) {
-                        coordinateSystems.add(coordSystems);
+                    coordSystem.lengthsRatio = getAxisLengthRatio(coordSystem.axes);
+                    coordSystem.axesTicks = retrieveAxisTicks(plot, coordSystem.axes);
+                    coordSystem.origin = coordSystem.axes.getKey().getIntersection(coordSystem.axes.getValue());
+                    if (initialFilter(coordSystem, plot)) {
+                        coordinateSystems.add(coordSystem);
                     }
+
+                    matchTicksWithCaptions(plot, coordSystem);
+
                 }
             }
         }
@@ -461,9 +502,11 @@ public class CoordinateSystem {
      * @param coordParams
      * @return
      */
-    private static boolean initialFilter(CoordinateSystem params) {
+    private static boolean initialFilter(CoordinateSystem cs, SVGPlot plot) {
         //return true;
-        return (params.lengthsRatio > 0.7) && (params.lengthsRatio < 1.3);
+        
+        double lenCoeff = (cs.axes.getKey().len() + cs.axes.getValue().len()) / (plot.boundary.getWidth() + plot.boundary.getHeight());
+        return (cs.lengthsRatio > 0.7) && (cs.lengthsRatio < 1.3) && (lenCoeff > 0.05);
 
     }
 
@@ -499,7 +542,6 @@ public class CoordinateSystem {
             CoordinateSystem par = (CoordinateSystem) array[i];
             results.add(par);
 
-            matchTicksWithCaptions(plot, par);
             try {
                 DebugGraphicalOutput.dumpCoordinateSystem(plot, par, "/tmp/detected_" + String.valueOf(i) + ".png");
             } catch (IOException ex) {

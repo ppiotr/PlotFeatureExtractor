@@ -27,11 +27,13 @@ public class CSSVMTrainingSetPreparation {
         System.out.println("   outputDir: The directiry in which the output images should be written");
     }
     public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            usage();
-            return;
-        }
+//        if (args.length != 2) {
+//            usage();
+//            return;
+//        }
+//        
+//        CoordSystemSVM.writeSamplesToDirectory(args[0], args[1]);
+        CoordSystemSVM.writeSamplesToDirectory("toprepare", "out");
         
-        CoordSystemSVM.writeSamplesToDirectory(args[0], args[1]);
     }
 }

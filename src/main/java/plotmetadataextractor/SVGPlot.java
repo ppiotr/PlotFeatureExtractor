@@ -48,6 +48,8 @@ public class SVGPlot {
     public HashMap<Shape, String> splitTextElements; /// text elements consisting of separate words
     public SpatialArray<String> splitTextIndex; /// index used to search for text elements
     public static long searchDivision = 100; // divide into 10000 tiles 
+    
+    public File sourceFile;
     // The members describing the extracted data
     public List<CoordinateSystem> coordinateSystems;
 
@@ -72,13 +74,13 @@ public class SVGPlot {
         }
     }
 
-    public SVGPlot(String fName) {
+    public SVGPlot(File plotFile) {
         this();
         try {
             String parser = XMLResourceDescriptor.getXMLParserClassName();
             SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser);
-            String uri = "file://" + fName;
-            InputStream is = new FileInputStream(new File(fName));
+            String uri = "file://" + plotFile.getAbsolutePath();
+            InputStream is = new FileInputStream(plotFile);
             Document doc = f.createDocument(uri, is);
 
             NodeList e1 = doc.getElementsByTagName("path");
@@ -92,13 +94,20 @@ public class SVGPlot {
             AffineTransform t;
             Point.Float p = new Point.Float();
             addGraphicsNode(i);
+            
+            this.sourceFile = plotFile;
             this.removeDuplicateLines(0.01);
             this.calculateOrthogonalIntervals();
             this.calculateTextIndex();
+            
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
             // ...
         }
+    }
+
+    public SVGPlot(String fName) {
+        this(new File(fName));
     }
 
     public final void calculateOrthogonalIntervals() {
@@ -155,37 +164,7 @@ public class SVGPlot {
         try {
             DebugGraphicalOutput dout = DebugGraphicalOutput.getInstance();
             dout.flush(new File("/tmp/out2.png"));
-//
-//            int i = 0;
-//            HashSet<ExtLine2D> used = new HashSet<ExtLine2D>();
-//
-//            for (ExtLine2D line : intersecting.keySet()) {
-//                dout.reset();
-//                //we search for the longest intersecting and draw intersecting with this one
-//
-//                ExtLine2D winner = line;
-//
-//                for (ExtLine2D inter : intersecting.get(line)) {
-//                    if (inter.len() > winner.len()) {
-//                        winner = inter;
-//                    }
-//                }
-//
-//                // now drawing the winner
-//                if (!used.contains(winner)) {
-//                    used.add(winner);
-//                    dout.graphics.setColor(Color.BLUE);
-//                    
-//                    for (ExtLine2D inter : intersecting.get(winner)) {
-//                        dout.graphics.draw(inter.getBounds());
-//                    }
-//
-//                    dout.graphics.setColor(Color.RED);
-//                    dout.graphics.draw(winner);
-//                    dout.flush(new File("/tmp/ortho_" + String.valueOf(i) + ".png"));
-//                    i++;
-//                }
-//            }
+
         } catch (IOException ex) {
             Logger.getLogger(PlotMetadataExtractor.class.getName()).log(Level.SEVERE, null, ex);
         }
