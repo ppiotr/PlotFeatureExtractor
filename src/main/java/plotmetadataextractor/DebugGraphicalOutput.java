@@ -94,12 +94,12 @@ public class DebugGraphicalOutput {
      */
     public static void dumpCoordinateSystem(SVGPlot plot, CoordinateSystem cs, String fname) throws IOException {
         DebugGraphicalOutput dgo = DebugGraphicalOutput.getInstance();
-        dgo.reset((int) Math.round(plot.boundary.getWidth()) + 10, (int) Math.round(plot.boundary.getHeight()) + 10);
+        dgo.reset((int) Math.round(plot.declaredBoundary.getWidth()) + 10, (int) Math.round(plot.declaredBoundary.getHeight()) + 10);
 
+        dgo.graphics.setTransform(AffineTransform.getTranslateInstance(-plot.declaredBoundary.getMinX() + 5, -plot.declaredBoundary.getMinY() + 5));
         dgo.graphics.drawImage(dgo.getPlotImage(plot), AffineTransform.getRotateInstance(0), null);
-        
+
 //        dgo.graphics.setColor(Color.PINK);
-//        dgo.graphics.setTransform(AffineTransform.getTranslateInstance(-plot.boundary.getMinX() + 5, -plot.boundary.getMinY() + 5));
 //        for (Shape sh : plot.splitTextElements.keySet()) {
 //            dgo.graphics.draw(sh);
 //        }
@@ -109,19 +109,23 @@ public class DebugGraphicalOutput {
 //            dgo.graphics.draw(line);
 //        }
 
+        dgo.graphics.setColor(new Color(255, 255, 255, 190));
+        dgo.graphics.fill(new Rectangle(0, 0, (int) plot.declaredBoundary.getWidth(), (int) plot.declaredBoundary.getHeight()));
+        dgo.graphics.setColor(new Color(0, 0, 0));
         dgo.graphics.setStroke(new BasicStroke(4));
 
         dgo.graphics.setColor(Color.red);
         // drawing the first axis
 
         dgo.graphics.draw(cs.axes.getKey());
-        
-                dgo.graphics.setStroke(new BasicStroke(2));
+
+        dgo.graphics.setStroke(new BasicStroke(2));
 
         for (CoordinateSystem.Tick tick : cs.axesTicks.getKey().ticks.values()) {
-            dgo.graphics.setColor(Color.red);
-            dgo.graphics.draw(tick.line);
-
+            if (tick.line != cs.axes.getValue()) {
+                dgo.graphics.setColor(Color.red);
+                dgo.graphics.draw(tick.line);
+            }
             if (tick.label != null) {
                 dgo.graphics.setColor(Color.BLACK);
                 dgo.graphics.draw(tick.label.boundary);
@@ -138,8 +142,10 @@ public class DebugGraphicalOutput {
         dgo.graphics.setStroke(new BasicStroke(2));
 
         for (CoordinateSystem.Tick tick : cs.axesTicks.getValue().ticks.values()) {
-            dgo.graphics.setColor(Color.blue);
-            dgo.graphics.draw(tick.line);
+            if (tick.line != cs.axes.getKey()) {
+                dgo.graphics.setColor(Color.blue);
+                dgo.graphics.draw(tick.line);
+            }
             if (tick.label != null) {
                 dgo.graphics.setColor(Color.BLACK);
                 dgo.graphics.draw(tick.label.boundary);
@@ -170,6 +176,7 @@ public class DebugGraphicalOutput {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         TranscoderOutput output = new TranscoderOutput(bos);
         try {
+            t.addTranscodingHint(PNGTranscoder.KEY_WIDTH, (float) plot.declaredBoundary.getWidth());
             t.transcode(input, output);
             bos.flush();
             bos.close();
@@ -181,7 +188,7 @@ public class DebugGraphicalOutput {
             return null;
         }
         // reading the stream into a buffered image
-        
+
         ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
         try {
             result = ImageIO.read(bis);

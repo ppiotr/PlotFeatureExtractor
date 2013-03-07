@@ -58,7 +58,11 @@ public class CoordSystemSVM {
             if (principalParts.length <= 0) {
                 throw new Exception("Incorrect filename");
             }
-            String[] vectorCoeff = principalParts[0].split("_");
+            String toProcess =principalParts[0];
+            if (principalParts[0].contains("__")){
+                toProcess = toProcess.split("__")[1];
+            }
+            String[] vectorCoeff = toProcess.split("_");
             for (String coeff : vectorCoeff) {
                 if (coeff.startsWith("dup")) {
                     break;
@@ -75,7 +79,7 @@ public class CoordSystemSVM {
          */
         public CSFeatureVector(CoordinateSystem cs, SVGPlot plot) {
             this.features = new LinkedList<Double>();
-            
+
             this.features.add(cs.lengthsRatio);
             this.features.add(cs.linesOutside);
             this.features.add((double) cs.getTicksNum());
@@ -131,9 +135,14 @@ public class CoordSystemSVM {
          *
          * @return
          */
-        public String toFileNamePrefix() {
+        public String toFileNamePrefix(String customData) {
             StringBuilder sb = new StringBuilder();
             boolean isFirst = true;
+            
+            if (customData.length() >0 ){
+                sb.append(customData);
+                sb.append("__");
+            }
             for (Double feature : this.features) {
                 if (!isFirst) {
                     sb.append("_");
@@ -171,27 +180,32 @@ public class CoordSystemSVM {
         });
 
         for (String svgFileName : svgFileNames) {
-            SVGPlot svgPlot = new SVGPlot(new File(plotsDirName, svgFileName));
-            List<CoordinateSystem> candidates = CoordinateSystem.extractCSCandidates(svgPlot);
-            for (CoordinateSystem csCandidate : candidates) {
-                CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
-                String fname;
-                File outputFile;
-                int dupInd = 0;
-                do {
-                    /**
-                     * There might already exists a feature vector having
-                     * exactly the same parameters ... better it has similar
-                     * properties, otherwise the feature selection has not been
-                     * performed correctly
-                     */
-                    fname = vec.toFileNamePrefix() + (dupInd == 0 ? "" : "_dup" + dupInd) + ".png";
-                    outputFile = new File(samplesDirName, fname);
-                    dupInd++;
-                } while (outputFile.exists());
-                DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, outputFile.getAbsolutePath());
-                vec = new CSFeatureVector(csCandidate, svgPlot);
+            System.out.println("processing " + svgFileName);
+            try {
+                SVGPlot svgPlot = new SVGPlot(new File(plotsDirName, svgFileName));
+                List<CoordinateSystem> candidates = CoordinateSystem.extractCSCandidates(svgPlot);
+                for (CoordinateSystem csCandidate : candidates) {
+                    CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
+                    String fname;
+                    File outputFile;
+                    int dupInd = 0;
+                    do {
+                        /**
+                         * There might already exists a feature vector having
+                         * exactly the same parameters ... better it has similar
+                         * properties, otherwise the feature selection has not
+                         * been performed correctly
+                         */
+                        fname = vec.toFileNamePrefix(svgFileName.replace(".svg", "")) + (dupInd == 0 ? "" : "_dup" + dupInd) + ".png";
+                        outputFile = new File(samplesDirName, fname);
+                        dupInd++;
+                    } while (outputFile.exists());
+                    DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, outputFile.getAbsolutePath());
+                    vec = new CSFeatureVector(csCandidate, svgPlot);
 
+                }
+            } catch (Exception e) {
+                System.err.println("Failed when processing " + svgFileName);
             }
         }
 

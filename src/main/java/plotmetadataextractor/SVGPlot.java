@@ -32,6 +32,7 @@ import org.apache.batik.util.XMLResourceDescriptor;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 
 /**
@@ -41,6 +42,7 @@ import org.w3c.dom.NodeList;
 public class SVGPlot {
 
     public Rectangle2D.Double boundary;
+    public Rectangle2D declaredBoundary; // the boundary declared in the source of the SVG file
     public List<Point2D> points;
     public List<ExtLine2D> lineSegments;
     public HashMap<ExtLine2D, List<ExtLine2D>> orthogonalIntervals;
@@ -48,7 +50,6 @@ public class SVGPlot {
     public HashMap<Shape, String> splitTextElements; /// text elements consisting of separate words
     public SpatialArray<String> splitTextIndex; /// index used to search for text elements
     public static long searchDivision = 100; // divide into 10000 tiles 
-    
     public File sourceFile;
     // The members describing the extracted data
     public List<CoordinateSystem> coordinateSystems;
@@ -83,6 +84,9 @@ public class SVGPlot {
             InputStream is = new FileInputStream(plotFile);
             Document doc = f.createDocument(uri, is);
 
+            NamedNodeMap attributes = doc.getAttributes();
+
+
             NodeList e1 = doc.getElementsByTagName("path");
             NodeList e2 = doc.getElementsByTagName("line");
 
@@ -90,16 +94,15 @@ public class SVGPlot {
             UserAgentAdapter ua = new UserAgentAdapter();
             BridgeContext cx = new BridgeContext(ua);
             GraphicsNode i = b.build(cx, doc);
-            CompositeGraphicsNode n;
-            AffineTransform t;
-            Point.Float p = new Point.Float();
+
+            this.declaredBoundary = i.getBounds();
             addGraphicsNode(i);
-            
             this.sourceFile = plotFile;
             this.removeDuplicateLines(0.01);
             this.calculateOrthogonalIntervals();
+
             this.calculateTextIndex();
-            
+
         } catch (IOException ex) {
             System.out.println("failed : exception " + ex.toString());
             // ...
@@ -264,7 +267,10 @@ public class SVGPlot {
             }
 
             if (segType == PathIterator.SEG_CLOSE || segType == PathIterator.SEG_LINETO) {
-                this.lineSegments.add(buildLineFromPoints(prevPoint, curPoint));
+                ExtLine2D segment = buildLineFromPoints(prevPoint, curPoint);
+                if (segment.intersects(this.declaredBoundary)) {
+                    this.lineSegments.add(segment);
+                }
             }
 
             shapeIt.next();
