@@ -506,7 +506,7 @@ public class CoordinateSystem {
         //return true;
         
         double lenCoeff = (cs.axes.getKey().len() + cs.axes.getValue().len()) / (plot.boundary.getWidth() + plot.boundary.getHeight());
-        return (cs.lengthsRatio > 0.7) && (cs.lengthsRatio < 1.3) && (lenCoeff > 0.05);
+        return (cs.lengthsRatio > 0.2) && (cs.lengthsRatio < 5) && (lenCoeff > 0.05);
 
     }
 

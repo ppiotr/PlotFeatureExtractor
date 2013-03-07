@@ -6,11 +6,12 @@ package plotmetadataextractor;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.PrintStream;
 import java.util.LinkedList;
 import java.util.List;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import plotmetadataextractor.CoordinateSystem.TickLabel;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * a SVM classifier distinguishing axis from false candidates
@@ -54,12 +55,13 @@ public class CoordSystemSVM {
             this.features = new LinkedList<Double>();
             File f = new File(fileName);
             String fname = f.getName();
-            String[] principalParts = fname.split("\\.");
+            String[] principalParts = fname.split("\\.png");
             if (principalParts.length <= 0) {
                 throw new Exception("Incorrect filename");
             }
-            String toProcess =principalParts[0];
-            if (principalParts[0].contains("__")){
+            
+            String toProcess = principalParts[0];
+            if (principalParts[0].contains("__")) {
                 toProcess = toProcess.split("__")[1];
             }
             String[] vectorCoeff = toProcess.split("_");
@@ -138,8 +140,8 @@ public class CoordSystemSVM {
         public String toFileNamePrefix(String customData) {
             StringBuilder sb = new StringBuilder();
             boolean isFirst = true;
-            
-            if (customData.length() >0 ){
+
+            if (customData.length() > 0) {
                 sb.append(customData);
                 sb.append("__");
             }
@@ -227,8 +229,12 @@ public class CoordSystemSVM {
      *
      * @return
      */
-    public static Pair<List<CSFeatureVector>, List<CSFeatureVector>> readClassifiedDirectory(String dirName) {
-        throw new NotImplementedException();
+    public static Pair<List<CSFeatureVector>, List<CSFeatureVector>> readClassifiedDirectory(String dirName) throws Exception {
+        File trueDir = new File(dirName, "true");
+        File falseDir = new File(dirName, "false");
+        return new ImmutablePair<List<CSFeatureVector>, List<CSFeatureVector>>(
+                getFeaturesFromDirectory(trueDir.getAbsolutePath()),
+                getFeaturesFromDirectory(falseDir.getAbsolutePath()));
     }
 
     /**
@@ -238,7 +244,55 @@ public class CoordSystemSVM {
      * @param dirName
      * @return
      */
-    private static List<CSFeatureVector> getFeaturesFromDirectory(String dirName) {
-        throw new NotImplementedException();
+    private static List<CSFeatureVector> getFeaturesFromDirectory(String dirName) throws Exception {
+        File inputDir = new File(dirName);
+        if (!inputDir.exists() || !inputDir.isDirectory() || !inputDir.canRead()) {
+            throw new Exception("Error when reading the input directory");
+        }
+        List<CSFeatureVector> result = new LinkedList<CSFeatureVector>();
+        String[] files = inputDir.list();
+        for (String fname : files) {
+            if (fname.endsWith(".png")) {
+                result.add(new CSFeatureVector(fname));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Writes a training set into a stream, using the format of LibSVM
+     * true candidates are encoded with the label +1, while false candidates with -1
+     * 
+     * @param samples
+     * @param os
+     */
+    public static void writeTrainingFile(
+            Pair<List<CSFeatureVector>, List<CSFeatureVector>> samples,
+            PrintStream os) {
+        writeSamples("+1", samples.getKey(), os);
+        writeSamples("-1", samples.getValue(), os);
+    }
+
+    /**
+     * Writes a list of samples belonging to the same class to a stream
+     * @param classIdentifier
+     * @param samples
+     * @param os
+     */
+    public static void writeSamples(String classIdentifier,
+            List<CSFeatureVector> samples, PrintStream os) {
+        for (CSFeatureVector vec : samples) {
+            os.print(classIdentifier);
+            os.print(" ");
+            int pos = 1;
+            for (Double feature : vec.features) {
+                os.print(pos);
+                os.print(":");
+                os.print(feature);
+                os.print(" ");
+                pos++;
+            }
+            os.println();
+        }
     }
 }
