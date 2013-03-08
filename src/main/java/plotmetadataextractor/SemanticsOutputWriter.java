@@ -6,9 +6,7 @@ package plotmetadataextractor;
 
 import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.Resource;
-import com.hp.hpl.jena.rdf.model.Statement;
 import com.hp.hpl.jena.vocabulary.DC;
-import com.hp.hpl.jena.vocabulary.DC_11;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.io.FileNotFoundException;
@@ -28,7 +26,7 @@ import plotmetadataextractor.CoordinateSystem.Tick;
  *
  * @author piotr
  */
-public class OutputWriter {
+public class SemanticsOutputWriter {
 
     private final InvenioOntologyAccessor invenio;
 
@@ -39,7 +37,7 @@ public class OutputWriter {
      * @param uri the URI of the plot (We assume that the plot object has been
      * created before)
      */
-    public OutputWriter() {
+    public SemanticsOutputWriter() {
         this.invenio = new InvenioOntologyAccessor("../InvenioSemantics/files/inveniomodel.owl");
     }
 
@@ -47,7 +45,7 @@ public class OutputWriter {
         try {
             this.invenio.saveModel();
         } catch (FileNotFoundException ex) {
-            Logger.getLogger(OutputWriter.class.getName()).log(Level.SEVERE, "Unable to save statements into the repository", ex);
+            Logger.getLogger(SemanticsOutputWriter.class.getName()).log(Level.SEVERE, "Unable to save statements into the repository", ex);
         }
     }
 

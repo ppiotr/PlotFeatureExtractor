@@ -6,9 +6,13 @@ package plotmetadataextractor;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.LinkedList;
 import java.util.List;
+import libsvm.svm;
+import libsvm.svm_model;
+import libsvm.svm_node;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import plotmetadataextractor.CoordinateSystem.TickLabel;
@@ -59,7 +63,7 @@ public class CoordSystemSVM {
             if (principalParts.length <= 0) {
                 throw new Exception("Incorrect filename");
             }
-            
+
             String toProcess = principalParts[0];
             if (principalParts[0].contains("__")) {
                 toProcess = toProcess.split("__")[1];
@@ -260,9 +264,9 @@ public class CoordSystemSVM {
     }
 
     /**
-     * Writes a training set into a stream, using the format of LibSVM
-     * true candidates are encoded with the label +1, while false candidates with -1
-     * 
+     * Writes a training set into a stream, using the format of LibSVM true
+     * candidates are encoded with the label +1, while false candidates with -1
+     *
      * @param samples
      * @param os
      */
@@ -275,6 +279,7 @@ public class CoordSystemSVM {
 
     /**
      * Writes a list of samples belonging to the same class to a stream
+     *
      * @param classIdentifier
      * @param samples
      * @param os
@@ -294,5 +299,35 @@ public class CoordSystemSVM {
             }
             os.println();
         }
+    }
+    /// the prediction - related stuff
+    public svm_model model;
+
+    public static CoordSystemSVM getStandardModel() throws IOException{
+        return new CoordSystemSVM("misc/coordinate_system_SVM.model");
+    }
+    
+    public CoordSystemSVM(String modelFileName) throws IOException {
+        this.model = libsvm.svm.svm_load_model(modelFileName);
+        
+    }
+
+    private boolean isCoordinateSystem(CSFeatureVector csFeatureVector) {
+        svm_node[] featureVec = new svm_node[csFeatureVector.features.size()];
+        int index=1;
+        for (Double feature: csFeatureVector.features){
+            featureVec[index] = new svm_node();
+            featureVec[index].index = index;
+            featureVec[index].value = feature;
+        }
+        
+//        double predicted_val = libsvm.svm.svm_predict(this.model, featureVec);
+        double[] prob_estimates = new double[csFeatureVector.features.size()];
+        double predicted_val = libsvm.svm.svm_predict_probability(model, featureVec, prob_estimates);
+        return predicted_val < 0;
+    }
+
+    public boolean isCoordinateSystem(CoordinateSystem cs, SVGPlot plot) {
+        return this.isCoordinateSystem(new CSFeatureVector(cs, plot));
     }
 }
