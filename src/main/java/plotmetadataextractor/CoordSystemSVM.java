@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import libsvm.svm;
 import libsvm.svm_model;
 import libsvm.svm_node;
@@ -163,61 +164,106 @@ public class CoordSystemSVM {
     }
 
     /**
+     * Creates a file name which encodes the given coordinate system
+     *
+     * @param cs The object storing the coorindate system
+     * @param fname The name of hte file from which this coordinate system has
+     * been extracted
+     * @return
+     */
+    public static String csToFileNameRoot(CoordinateSystem cs, String fname) {
+        return String.format("%s_%s_%s", fname, lineToString(cs.axes.getKey()), lineToString(cs.axes.getValue()));
+    }
+
+    public static String lineToString(ExtLine2D line) {
+        return String.format("%f_%f_%f_%f", line.x1, line.y1, line.x2, line.y2);
+
+    }
+
+    /**
+     * Analyses the file name of a classified coordinate system and splits it
+     * into the coordinates part and the source filename path
+     *
+     * @param fname
+     * @return
+     */
+    public static Pair<String, String> splitEncodedFileName(String fname) {
+        // find the 8th '_' char from the end and use the entire remaining prefix
+        String fnamep = FileUtils.stripFileExt(fname);
+        int pos = fnamep.length() - 1;
+        for (int i = 0; i < 8; i++) {
+            while (pos >= 0 && fnamep.charAt(pos) != '_') {
+                pos--;
+            }
+            pos--;
+        }
+
+        if (pos <= 0) {
+            return new ImmutablePair<String, String>("", fnamep);
+
+        } else {
+            return new ImmutablePair<String, String>(fnamep.substring(0, pos+1), fnamep.substring(pos + 2));
+        }
+    }
+
+    /**
      * Generates a directory containing coordinate system candidates ready for
      * manual classification.
      *
      * @param plotsDirName
      * @param samplesDirName Name of the directory to write the samples
-     * @param numSamples  the number of samples to be selected from the candidates
+     * @param numSamples the number of samples to be selected from the
+     * candidates
      */
     public static void writeSamplesToDirectory(String plotsDirName, String samplesDirName, int numSamples) throws Exception {
         File outputDir = new File(samplesDirName);
-        
+
         if (!outputDir.exists()) {
             outputDir.mkdir();
         }
-        
-        LinkedList<Pair<CoordinateSystem, String>> csCandidates = new LinkedList<Pair<CoordinateSystem, String>>(); // cscandidate, source fname
-        for (String svgFileName : FileUtils.getRelevantFiles(plotsDirName, ".png")) {
+
+        LinkedList<Pair<CoordinateSystem, SVGPlot>> csCandidates = new LinkedList<Pair<CoordinateSystem, SVGPlot>>(); // cscandidate, source fname
+        for (String svgFileName : FileUtils.getRelevantFiles(plotsDirName, ".svg")) {
             System.out.println("processing " + svgFileName);
             try {
                 SVGPlot svgPlot = new SVGPlot(new File(plotsDirName, svgFileName));
+
                 List<CoordinateSystem> candidates = CoordinateSystem.extractCSCandidates(svgPlot);
                 for (CoordinateSystem csCandidate : candidates) {
-                    csCandidates.add(new ImmutablePair<CoordinateSystem, String>(csCandidate, svgFileName));
-                    
-/*                    CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
-                    String fname;
-                    File outputFile;
-                    int dupInd = 0;
-                    do {
-                        /**
-                         * There might already exists a feature vector having
-                         * exactly the same parameters ... better it has similar
-                         * properties, otherwise the feature selection has not
-                         * been performed correctly
-                         */
-  /*                      fname = vec.toFileNamePrefix(svgFileName.replace(".svg", "")) + (dupInd == 0 ? "" : "_dup" + dupInd) + ".png";
-                        outputFile = new File(samplesDirName, fname);
-                        dupInd++;
-                    } while (outputFile.exists());
-                    DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, outputFile.getAbsolutePath());
-                    vec = new CSFeatureVector(csCandidate, svgPlot);
-*/
-                    
+                    csCandidates.add(new ImmutablePair<CoordinateSystem, SVGPlot>(csCandidate, svgPlot));
+
+                    System.out.println(csToFileNameRoot(csCandidate, svgFileName));
                 }
             } catch (Exception e) {
                 System.err.println("Failed when processing " + svgFileName);
             }
         }
-        
+
         // now selecting the random samples ! we do not want to write all the extracted samples as they will be very similar within every file
-        
-        
+        Random random = new Random();
+        for (int i = 0; i < numSamples && !csCandidates.isEmpty(); ++i) {
+            int selPos = random.nextInt(csCandidates.size());
+
+            writeCsCandidateDebugImage(csCandidates.get(selPos).getKey(), csCandidates.get(selPos).getValue(), outputDir);
+            csCandidates.remove(selPos);
+        }
 
         // just creating empty directories for true and false candidates
         (new File(samplesDirName, "true")).mkdir();
         (new File(samplesDirName, "false")).mkdir();
+    }
+
+    /**
+     * Process a single coordinate system candidate ... write its annotated
+     * image into a graphical file
+     *
+     * @param cs
+     * @param sourceFname
+     * @param outputDir
+     */
+    private static void writeCsCandidateDebugImage(CoordinateSystem cs, SVGPlot plot, File outputDir) throws IOException {
+        File outputFile = new File(outputDir, csToFileNameRoot(cs, FileUtils.stripFileExt(plot.sourceFile.getName())) + ".png");
+        DebugGraphicalOutput.dumpCoordinateSystem(plot, cs, outputFile.getAbsolutePath());
     }
 
     /**
@@ -303,24 +349,24 @@ public class CoordSystemSVM {
     /// the prediction - related stuff
     public svm_model model;
 
-    public static CoordSystemSVM getStandardModel() throws IOException{
+    public static CoordSystemSVM getStandardModel() throws IOException {
         return new CoordSystemSVM("misc/coordinate_system_SVM.model");
     }
-    
+
     public CoordSystemSVM(String modelFileName) throws IOException {
         this.model = libsvm.svm.svm_load_model(modelFileName);
-        
+
     }
 
     private boolean isCoordinateSystem(CSFeatureVector csFeatureVector) {
         svm_node[] featureVec = new svm_node[csFeatureVector.features.size()];
-        int index=1;
-        for (Double feature: csFeatureVector.features){
+        int index = 1;
+        for (Double feature : csFeatureVector.features) {
             featureVec[index] = new svm_node();
             featureVec[index].index = index;
             featureVec[index].value = feature;
         }
-        
+
 //        double predicted_val = libsvm.svm.svm_predict(this.model, featureVec);
         double[] prob_estimates = new double[csFeatureVector.features.size()];
         double predicted_val = libsvm.svm.svm_predict_probability(model, featureVec, prob_estimates);

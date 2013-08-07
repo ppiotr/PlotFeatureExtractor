@@ -33,7 +33,7 @@ public class CSSVMTrainingSetPreparation {
 //        }
 //        
 //        CoordSystemSVM.writeSamplesToDirectory(args[0], args[1]);
-        CoordSystemSVM.writeSamplesToDirectory("toprepare", "out");
+        CoordSystemSVM.writeSamplesToDirectory("toprepare", "out", 4000);
         
     }
 }
