@@ -4,6 +4,7 @@
  */
 package plotmetadataextractor;
 
+import invenio.common.FileUtils;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -167,31 +168,25 @@ public class CoordSystemSVM {
      *
      * @param plotsDirName
      * @param samplesDirName Name of the directory to write the samples
+     * @param numSamples  the number of samples to be selected from the candidates
      */
-    public static void writeSamplesToDirectory(String plotsDirName, String samplesDirName) throws Exception {
-        File inputDir = new File(plotsDirName);
+    public static void writeSamplesToDirectory(String plotsDirName, String samplesDirName, int numSamples) throws Exception {
         File outputDir = new File(samplesDirName);
-        if (!inputDir.exists()) {
-            throw new Exception("The input directory does not exist");
-        }
+        
         if (!outputDir.exists()) {
             outputDir.mkdir();
         }
-
-        String[] svgFileNames = inputDir.list(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String name) {
-                return name.endsWith(".svg");
-            }
-        });
-
-        for (String svgFileName : svgFileNames) {
+        
+        LinkedList<Pair<CoordinateSystem, String>> csCandidates = new LinkedList<Pair<CoordinateSystem, String>>(); // cscandidate, source fname
+        for (String svgFileName : FileUtils.getRelevantFiles(plotsDirName, ".png")) {
             System.out.println("processing " + svgFileName);
             try {
                 SVGPlot svgPlot = new SVGPlot(new File(plotsDirName, svgFileName));
                 List<CoordinateSystem> candidates = CoordinateSystem.extractCSCandidates(svgPlot);
                 for (CoordinateSystem csCandidate : candidates) {
-                    CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
+                    csCandidates.add(new ImmutablePair<CoordinateSystem, String>(csCandidate, svgFileName));
+                    
+/*                    CSFeatureVector vec = new CSFeatureVector(csCandidate, svgPlot);
                     String fname;
                     File outputFile;
                     int dupInd = 0;
@@ -202,18 +197,23 @@ public class CoordSystemSVM {
                          * properties, otherwise the feature selection has not
                          * been performed correctly
                          */
-                        fname = vec.toFileNamePrefix(svgFileName.replace(".svg", "")) + (dupInd == 0 ? "" : "_dup" + dupInd) + ".png";
+  /*                      fname = vec.toFileNamePrefix(svgFileName.replace(".svg", "")) + (dupInd == 0 ? "" : "_dup" + dupInd) + ".png";
                         outputFile = new File(samplesDirName, fname);
                         dupInd++;
                     } while (outputFile.exists());
                     DebugGraphicalOutput.dumpCoordinateSystem(svgPlot, csCandidate, outputFile.getAbsolutePath());
                     vec = new CSFeatureVector(csCandidate, svgPlot);
-
+*/
+                    
                 }
             } catch (Exception e) {
                 System.err.println("Failed when processing " + svgFileName);
             }
         }
+        
+        // now selecting the random samples ! we do not want to write all the extracted samples as they will be very similar within every file
+        
+        
 
         // just creating empty directories for true and false candidates
         (new File(samplesDirName, "true")).mkdir();
