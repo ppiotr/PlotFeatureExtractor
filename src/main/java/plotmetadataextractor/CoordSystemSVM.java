@@ -161,6 +161,27 @@ public class CoordSystemSVM {
             }
             return sb.toString();
         }
+
+        /**
+         * Creates the representation as a string suitable for the SVM training
+         * file
+         *
+         * @param string
+         */
+        public String toTrainingRepresentation(String svmClass) {
+            StringBuilder resB = new StringBuilder();
+            resB.append(svmClass);
+            int featureInd = 0;
+            for (Double feature : this.features) {
+                resB.append(" ");
+                resB.append(featureInd);
+                resB.append(":");
+                resB.append(feature);
+                featureInd++;
+            }
+            resB.append("\n");
+            return resB.toString();
+        }
     }
 
     /**
@@ -202,7 +223,7 @@ public class CoordSystemSVM {
             return new ImmutablePair<String, String>("", fnamep);
 
         } else {
-            return new ImmutablePair<String, String>(fnamep.substring(0, pos+1), fnamep.substring(pos + 2));
+            return new ImmutablePair<String, String>(fnamep.substring(0, pos + 1), fnamep.substring(pos + 2));
         }
     }
 
@@ -266,62 +287,6 @@ public class CoordSystemSVM {
         DebugGraphicalOutput.dumpCoordinateSystem(plot, cs, outputFile.getAbsolutePath());
     }
 
-    /**
-     * A method reading a manually classified directory and creating two lists
-     * of feature vectors.
-     *
-     * The first list contains feature vectors corresponding to real coordinate
-     * systems. The second list consists of false candidates.
-     *
-     * @param dirName The name of the directory under which the classification
-     * took place. This directory is supposed to contain two subdirectories:
-     * true and false
-     *
-     * @return
-     */
-    public static Pair<List<CSFeatureVector>, List<CSFeatureVector>> readClassifiedDirectory(String dirName) throws Exception {
-        File trueDir = new File(dirName, "true");
-        File falseDir = new File(dirName, "false");
-        return new ImmutablePair<List<CSFeatureVector>, List<CSFeatureVector>>(
-                getFeaturesFromDirectory(trueDir.getAbsolutePath()),
-                getFeaturesFromDirectory(falseDir.getAbsolutePath()));
-    }
-
-    /**
-     * Creates a list of feature vectors encoded in file names from the given
-     * directory
-     *
-     * @param dirName
-     * @return
-     */
-    private static List<CSFeatureVector> getFeaturesFromDirectory(String dirName) throws Exception {
-        File inputDir = new File(dirName);
-        if (!inputDir.exists() || !inputDir.isDirectory() || !inputDir.canRead()) {
-            throw new Exception("Error when reading the input directory");
-        }
-        List<CSFeatureVector> result = new LinkedList<CSFeatureVector>();
-        String[] files = inputDir.list();
-        for (String fname : files) {
-            if (fname.endsWith(".png")) {
-                result.add(new CSFeatureVector(fname));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Writes a training set into a stream, using the format of LibSVM true
-     * candidates are encoded with the label +1, while false candidates with -1
-     *
-     * @param samples
-     * @param os
-     */
-    public static void writeTrainingFile(
-            Pair<List<CSFeatureVector>, List<CSFeatureVector>> samples,
-            PrintStream os) {
-        writeSamples("+1", samples.getKey(), os);
-        writeSamples("-1", samples.getValue(), os);
-    }
 
     /**
      * Writes a list of samples belonging to the same class to a stream
@@ -330,22 +295,7 @@ public class CoordSystemSVM {
      * @param samples
      * @param os
      */
-    public static void writeSamples(String classIdentifier,
-            List<CSFeatureVector> samples, PrintStream os) {
-        for (CSFeatureVector vec : samples) {
-            os.print(classIdentifier);
-            os.print(" ");
-            int pos = 1;
-            for (Double feature : vec.features) {
-                os.print(pos);
-                os.print(":");
-                os.print(feature);
-                os.print(" ");
-                pos++;
-            }
-            os.println();
-        }
-    }
+
     /// the prediction - related stuff
     public svm_model model;
 

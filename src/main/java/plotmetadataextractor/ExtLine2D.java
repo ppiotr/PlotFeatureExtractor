@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package plotmetadataextractor;
 
 import java.awt.geom.Line2D;
@@ -329,5 +325,19 @@ public class ExtLine2D extends Line2D.Double {
         } else {
             return vecLen(ortho);
         }
+    }
+    
+    /**
+     * Calculates the distance between ends of this line and  the other and returns the sum of them
+     * This method assumes that both lines are normalised
+     * @param l
+     * @return 
+     */
+    public double endsDistance(ExtLine2D l){
+        Point2D.Double p1 = new Point2D.Double(this.x1, this.y1);
+        Point2D.Double p2 = new Point2D.Double(this.x2, this.y2);
+        Point2D.Double p3 = new Point2D.Double(l.x1, l.y1);
+        Point2D.Double p4 = new Point2D.Double(l.x2, l.y2);
+        return p1.distance(p3) + p2.distance(p4);
     }
 }
